@@ -1,34 +1,89 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { LoadingScreen } from '@/components/LoadingScreen';
+import { supabase } from '@/lib/supabase';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+// Тип пользователя
+interface UserContextType {
+  user: any;
+  loading: boolean;
+  signOut: () => Promise<void>;
+}
+
+const UserContext = createContext<UserContextType>({
+  user: null,
+  loading: true,
+  signOut: async () => {},
+});
+
+export function useUser() {
+  return useContext(UserContext);
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    MuseoSansCyrl_100: require('../assets/fonts/MuseoSansCyrl_100.otf'),
-    MuseoSansCyrl_300: require('../assets/fonts/MuseoSansCyrl_300.otf'),
-    MuseoSansCyrl_500: require('../assets/fonts/MuseoSansCyrl_500.otf'),
-    MuseoSansCyrl_700: require('../assets/fonts/MuseoSansCyrl_700.otf'),
-    MuseoSansCyrl_900: require('../assets/fonts/MuseoSansCyrl_900.otf'),
-  });
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const router = useRouter();
+  const segments = useSegments();
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
+  useEffect(() => {
+    const getSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) setErrorMsg(error.message);
+        setUser(data?.session?.user ?? null);
+        setLoading(false);
+      } catch (e: any) {
+        setErrorMsg(e.message || 'Unknown error');
+        setLoading(false);
+      }
+    };
+    getSession();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  const handleSplashFinish = () => {
+    setShowSplash(false);
+  };
+
+  // Показываем загрузочный экран
+  if (showSplash) {
+    return <LoadingScreen onFinish={handleSplashFinish} />;
+  }
+
+  // Показываем индикатор загрузки для аутентификации
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#FF6246" />
+      </View>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#FF6246" />
+      </View>
+    );
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <UserContext.Provider value={{ user, loading, signOut }}>
+      <Slot />
+    </UserContext.Provider>
   );
 }

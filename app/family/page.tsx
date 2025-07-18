@@ -67,34 +67,44 @@ export default function FamilyPage() {
     );
   };
 
+  const BG = '#FFE7D8';
+
   return (
-    <ThemedView style={styles.container}>
-      <ThemedView style={styles.header}>
+    <ThemedView style={[styles.container, { backgroundColor: '#fff', paddingHorizontal: 16 }]}>
+      <ThemedView style={[styles.header, { alignItems: 'center' }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color="#000" />
         </TouchableOpacity>
         <ThemedText type="title">Семейный аккаунт</ThemedText>
       </ThemedView>
 
-      <ThemedView style={styles.infoCard}>
-        <ThemedText type="subtitle">Информация о подписке</ThemedText>
-        <ThemedView style={styles.infoRow}>
-          <ThemedText type="defaultSemiBold">Тип:</ThemedText>
-          <ThemedText>Семейный</ThemedText>
+      <TouchableOpacity 
+        style={[styles.infoCard, { backgroundColor: BG }]}
+        onPress={() => router.push('./subscription')}
+      >
+        <ThemedView style={styles.infoCardContent}>
+          <ThemedView style={styles.infoCardHeader}>
+            <ThemedText type="subtitle">Информация о подписке</ThemedText>
+            <IconSymbol name="chevron.right" size={16} color="#888888" />
+          </ThemedView>
+          <ThemedView style={styles.infoRow}>
+            <ThemedText type="defaultSemiBold">Тип:</ThemedText>
+            <ThemedText>Семейный</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.infoRow}>
+            <ThemedText type="defaultSemiBold">Стоимость:</ThemedText>
+            <ThemedText>4 900 ₽/месяц</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.infoRow}>
+            <ThemedText type="defaultSemiBold">Участники:</ThemedText>
+            <ThemedText>{familyMembers.length}/4</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.infoRow}>
+            <ThemedText type="defaultSemiBold">Действует до:</ThemedText>
+            <ThemedText>31.08.2023</ThemedText>
+          </ThemedView>
         </ThemedView>
-        <ThemedView style={styles.infoRow}>
-          <ThemedText type="defaultSemiBold">Стоимость:</ThemedText>
-          <ThemedText>4 900 ₽/месяц</ThemedText>
-        </ThemedView>
-        <ThemedView style={styles.infoRow}>
-          <ThemedText type="defaultSemiBold">Участники:</ThemedText>
-          <ThemedText>{familyMembers.length}/4</ThemedText>
-        </ThemedView>
-        <ThemedView style={styles.infoRow}>
-          <ThemedText type="defaultSemiBold">Действует до:</ThemedText>
-          <ThemedText>31.08.2023</ThemedText>
-        </ThemedView>
-      </ThemedView>
+      </TouchableOpacity>
 
       <ThemedText type="subtitle" style={styles.membersTitle}>
         Участники ({familyMembers.length}/4)
@@ -102,7 +112,7 @@ export default function FamilyPage() {
 
       <ThemedView style={styles.membersList}>
         {familyMembers.map(member => (
-          <ThemedView key={member.id} style={styles.memberCard}>
+          <ThemedView key={member.id} style={[styles.memberCard, { backgroundColor: BG }]}>
             <ThemedView style={styles.memberInfo}>
               <Image source={member.photo} style={styles.memberPhoto} />
               <ThemedView style={styles.memberDetails}>
@@ -159,6 +169,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   infoRow: {
     flexDirection: 'row',
