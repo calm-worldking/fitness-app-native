@@ -1,110 +1,244 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
-export default function TabTwoScreen() {
+interface Gym {
+  id: string;
+  name: string;
+  address: string;
+  image: any;
+  features: string[];
+  category: string;
+}
+
+const allGyms: Gym[] = [
+  {
+    id: '1',
+    name: 'FitLife Центральный',
+    address: 'ул. Ленина, 42',
+    image: require('../../assets/images/placeholder.jpg'),
+    features: ['Бассейн', 'Сауна', 'Групповые занятия'],
+    category: 'premium'
+  },
+  {
+    id: '2',
+    name: 'FitLife Восточный',
+    address: 'ул. Гагарина, 15',
+    image: require('../../assets/images/placeholder.jpg'),
+    features: ['Тренажерный зал', 'Групповые занятия'],
+    category: 'standard'
+  },
+  {
+    id: '3',
+    name: 'FitLife Южный',
+    address: 'ул. Пушкина, 78',
+    image: require('../../assets/images/placeholder.jpg'),
+    features: ['Бассейн', 'Тренажерный зал', 'Детская комната'],
+    category: 'premium'
+  },
+  {
+    id: '4',
+    name: 'FitLife Северный',
+    address: 'ул. Мира, 23',
+    image: require('../../assets/images/placeholder.jpg'),
+    features: ['Тренажерный зал', 'Кардио-зона'],
+    category: 'standard'
+  },
+  {
+    id: '5',
+    name: 'FitLife Западный',
+    address: 'ул. Советская, 56',
+    image: require('../../assets/images/placeholder.jpg'),
+    features: ['Бассейн', 'Сауна', 'Спа-центр', 'Групповые занятия'],
+    category: 'premium'
+  }
+];
+
+const categories = [
+  { id: 'all', name: 'Все' },
+  { id: 'premium', name: 'Премиум' },
+  { id: 'standard', name: 'Стандарт' }
+];
+
+export default function ExploreScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  const filteredGyms = allGyms.filter(gym => {
+    const matchesSearch = gym.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         gym.address.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || gym.category === selectedCategory;
+    
+    return matchesSearch && matchesCategory;
+  });
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+    <ThemedView style={styles.container}>
+      {/* Поисковая строка */}
+      <ThemedView style={styles.searchContainer}>
+        <IconSymbol name="magnifyingglass" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Поиск залов"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <IconSymbol name="xmark.circle.fill" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
+
+      {/* Фильтры по категориям */}
+      <FlatList
+        horizontal
+        data={categories}
+        keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoriesList}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[
+              styles.categoryButton,
+              selectedCategory === item.id && styles.selectedCategoryButton
+            ]}
+            onPress={() => setSelectedCategory(item.id)}
+          >
+            <ThemedText
+              style={[
+                styles.categoryText,
+                selectedCategory === item.id && styles.selectedCategoryText
+              ]}
+            >
+              {item.name}
             </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+          </TouchableOpacity>
+        )}
+      />
+
+      {/* Список залов */}
+      <FlatList
+        data={filteredGyms}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.gymsList}
+        ListEmptyComponent={
+          <ThemedView style={styles.emptyContainer}>
+            <ThemedText style={styles.emptyText}>
+              Залы не найдены. Попробуйте изменить параметры поиска.
+            </ThemedText>
+          </ThemedView>
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity style={styles.gymCard}>
+            <Image source={item.image} style={styles.gymImage} />
+            <ThemedView style={styles.gymContent}>
+              <ThemedText type="defaultSemiBold">{item.name}</ThemedText>
+              <ThemedText style={styles.gymAddress}>{item.address}</ThemedText>
+              <ThemedView style={styles.featuresContainer}>
+                {item.features.map((feature, index) => (
+                  <ThemedView key={index} style={styles.featureTag}>
+                    <ThemedText style={styles.featureText}>{feature}</ThemedText>
+                  </ThemedView>
+                ))}
+              </ThemedView>
+            </ThemedView>
+          </TouchableOpacity>
+        )}
+      />
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    padding: 16,
   },
-  titleContainer: {
+  searchContainer: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 48,
+    fontSize: 16,
+  },
+  categoriesList: {
+    marginBottom: 16,
+  },
+  categoryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  selectedCategoryButton: {
+    backgroundColor: '#4CAF50',
+  },
+  categoryText: {
+    fontWeight: '500',
+  },
+  selectedCategoryText: {
+    color: 'white',
+  },
+  gymsList: {
+    paddingBottom: 16,
+  },
+  gymCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  gymImage: {
+    width: '100%',
+    height: 150,
+  },
+  gymContent: {
+    padding: 16,
+  },
+  gymAddress: {
+    marginTop: 4,
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  featuresContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  featureTag: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  featureText: {
+    fontSize: 12,
+  },
+  emptyContainer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });

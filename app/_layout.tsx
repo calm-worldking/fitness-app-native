@@ -10,6 +10,11 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    MuseoSansCyrl_100: require('../assets/fonts/MuseoSansCyrl_100.otf'),
+    MuseoSansCyrl_300: require('../assets/fonts/MuseoSansCyrl_300.otf'),
+    MuseoSansCyrl_500: require('../assets/fonts/MuseoSansCyrl_500.otf'),
+    MuseoSansCyrl_700: require('../assets/fonts/MuseoSansCyrl_700.otf'),
+    MuseoSansCyrl_900: require('../assets/fonts/MuseoSansCyrl_900.otf'),
   });
 
   if (!loaded) {

@@ -1,0 +1,238 @@
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
+
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+
+interface FamilyMember {
+  id: string;
+  name: string;
+  email: string;
+  photo: any;
+  isActive: boolean;
+}
+
+export default function FamilyPage() {
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([
+    {
+      id: '1',
+      name: 'Иван Иванов',
+      email: 'ivan@example.com',
+      photo: require('../../assets/images/placeholder-user.jpg'),
+      isActive: true
+    },
+    {
+      id: '2',
+      name: 'Мария Иванова',
+      email: 'maria@example.com',
+      photo: require('../../assets/images/placeholder-user.jpg'),
+      isActive: true
+    },
+    {
+      id: '3',
+      name: 'Алексей Иванов',
+      email: 'alexey@example.com',
+      photo: require('../../assets/images/placeholder-user.jpg'),
+      isActive: true
+    }
+  ]);
+
+  const toggleMemberStatus = (id: string) => {
+    setFamilyMembers(members => 
+      members.map(member => 
+        member.id === id 
+          ? { ...member, isActive: !member.isActive } 
+          : member
+      )
+    );
+  };
+
+  const removeMember = (id: string) => {
+    Alert.alert(
+      'Удаление участника',
+      'Вы уверены, что хотите удалить этого участника из семейного аккаунта?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Удалить', 
+          style: 'destructive',
+          onPress: () => {
+            setFamilyMembers(members => members.filter(member => member.id !== id));
+          }
+        }
+      ]
+    );
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedView style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <IconSymbol name="chevron.left" size={24} color="#000" />
+        </TouchableOpacity>
+        <ThemedText type="title">Семейный аккаунт</ThemedText>
+      </ThemedView>
+
+      <ThemedView style={styles.infoCard}>
+        <ThemedText type="subtitle">Информация о подписке</ThemedText>
+        <ThemedView style={styles.infoRow}>
+          <ThemedText type="defaultSemiBold">Тип:</ThemedText>
+          <ThemedText>Семейный</ThemedText>
+        </ThemedView>
+        <ThemedView style={styles.infoRow}>
+          <ThemedText type="defaultSemiBold">Стоимость:</ThemedText>
+          <ThemedText>4 900 ₽/месяц</ThemedText>
+        </ThemedView>
+        <ThemedView style={styles.infoRow}>
+          <ThemedText type="defaultSemiBold">Участники:</ThemedText>
+          <ThemedText>{familyMembers.length}/4</ThemedText>
+        </ThemedView>
+        <ThemedView style={styles.infoRow}>
+          <ThemedText type="defaultSemiBold">Действует до:</ThemedText>
+          <ThemedText>31.08.2023</ThemedText>
+        </ThemedView>
+      </ThemedView>
+
+      <ThemedText type="subtitle" style={styles.membersTitle}>
+        Участники ({familyMembers.length}/4)
+      </ThemedText>
+
+      <ThemedView style={styles.membersList}>
+        {familyMembers.map(member => (
+          <ThemedView key={member.id} style={styles.memberCard}>
+            <ThemedView style={styles.memberInfo}>
+              <Image source={member.photo} style={styles.memberPhoto} />
+              <ThemedView style={styles.memberDetails}>
+                <ThemedText type="defaultSemiBold">{member.name}</ThemedText>
+                <ThemedText style={styles.memberEmail}>{member.email}</ThemedText>
+              </ThemedView>
+            </ThemedView>
+            <ThemedView style={styles.memberActions}>
+              <TouchableOpacity 
+                style={[styles.statusButton, member.isActive ? styles.activeButton : styles.inactiveButton]} 
+                onPress={() => toggleMemberStatus(member.id)}
+              >
+                <ThemedText style={member.isActive ? styles.activeText : styles.inactiveText}>
+                  {member.isActive ? 'Активен' : 'Не активен'}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.removeButton}
+                onPress={() => removeMember(member.id)}
+              >
+                <IconSymbol name="trash" size={20} color="#FF3B30" />
+              </TouchableOpacity>
+            </ThemedView>
+          </ThemedView>
+        ))}
+      </ThemedView>
+
+      {familyMembers.length < 4 && (
+        <TouchableOpacity style={styles.addButton}>
+          <IconSymbol name="plus" size={20} color="white" style={styles.addIcon} />
+          <ThemedText style={styles.addButtonText}>Добавить участника</ThemedText>
+        </TouchableOpacity>
+      )}
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  infoCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  membersTitle: {
+    marginBottom: 16,
+  },
+  membersList: {
+    gap: 16,
+  },
+  memberCard: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  memberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  memberPhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  memberDetails: {
+    marginLeft: 12,
+  },
+  memberEmail: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  memberActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  activeButton: {
+    backgroundColor: '#E8F5E9',
+  },
+  inactiveButton: {
+    backgroundColor: '#FFEBEE',
+  },
+  activeText: {
+    color: '#4CAF50',
+  },
+  inactiveText: {
+    color: '#FF3B30',
+  },
+  removeButton: {
+    padding: 8,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  addIcon: {
+    marginRight: 8,
+  },
+  addButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+}); 
