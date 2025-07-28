@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "fitness-app-native",
+    "name": "Fitness App",
     "slug": "fitness-app-native",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,13 +9,17 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fitnessapp.mobile",
+      "buildNumber": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.fitnessapp.mobile",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true
     },
     "web": {

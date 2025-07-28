@@ -32,20 +32,20 @@ const gyms = [
     address: 'ул. Ленина, 42',
     description: 'Современный фитнес-центр с бассейном, тренажерным залом и зонами для групповых занятий. Профессиональные тренеры помогут достичь ваших целей.',
     images: [
-      require('@/assets/images/placeholder.jpg'),
-      require('@/assets/images/placeholder.jpg'),
-      require('@/assets/images/placeholder.jpg'),
+      require('@/assets/images/placeholder_gym5.jpg'),
+      require('@/assets/images/placeholder_gym1.jpg'),
+      require('@/assets/images/placeholder_gym6.jpg'),
     ],
     rating: 9.8,
     totalReviews: 27721,
     visits: 12,
     maxVisits: 12,
-         features: [
-       { name: 'Питьевая вода', icon: 'local-drink' as any },
-       { name: 'Душ', icon: 'shower' as any },
-       { name: 'Сауна', icon: 'hot-tub' as any },
-       { name: 'Парковка', icon: 'local-parking' as any },
-     ],
+    features: [
+      { name: 'Питьевая вода', icon: 'local-drink' as any },
+      { name: 'Душ', icon: 'shower' as any },
+      { name: 'Сауна', icon: 'hot-tub' as any },
+      { name: 'Парковка', icon: 'local-parking' as any },
+    ],
     amenities: [
       { title: 'Профессионализм тренера', rating: 9.9 },
       { title: 'Чистота помещения', rating: 9.8 },
@@ -60,17 +60,18 @@ const gyms = [
     address: 'ул. Гагарина, 15',
     description: 'Уютный клуб с современным оборудованием и профессиональными тренерами.',
     images: [
-      require('@/assets/images/placeholder.jpg'),
-      require('@/assets/images/placeholder.jpg'),
+      require('@/assets/images/placeholder_gym6.jpg'),
+      require('@/assets/images/placeholder_gym2.jpg'),
+      require('@/assets/images/placeholder_gym7.jpg'),
     ],
     rating: 9.5,
     totalReviews: 15430,
     visits: 8,
     maxVisits: 12,
-         features: [
-       { name: 'Парковка', icon: 'local-parking' as any },
-       { name: 'Душ', icon: 'shower' as any },
-     ],
+    features: [
+      { name: 'Парковка', icon: 'local-parking' as any },
+      { name: 'Душ', icon: 'shower' as any },
+    ],
     amenities: [
       { title: 'Профессионализм тренера', rating: 9.6 },
       { title: 'Чистота помещения', rating: 9.4 },
@@ -82,16 +83,18 @@ const gyms = [
     address: 'ул. Пушкина, 78',
     description: 'Большой выбор групповых программ и просторный тренажерный зал.',
     images: [
-      require('@/assets/images/placeholder.jpg'),
+      require('@/assets/images/placeholder_gym5.jpg'),
+      require('@/assets/images/placeholder_gym7.jpg'),
+      require('@/assets/images/placeholder_gym3.jpg'),
     ],
     rating: 9.7,
     totalReviews: 8950,
     visits: 10,
     maxVisits: 12,
-         features: [
-       { name: 'Сауна', icon: 'hot-tub' as any },
-       { name: 'Питьевая вода', icon: 'local-drink' as any },
-     ],
+    features: [
+      { name: 'Сауна', icon: 'hot-tub' as any },
+      { name: 'Питьевая вода', icon: 'local-drink' as any },
+    ],
     amenities: [
       { title: 'Профессионализм тренера', rating: 9.8 },
       { title: 'Чистота помещения', rating: 9.6 },

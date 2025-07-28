@@ -6,14 +6,14 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    RefreshControl,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../_layout';
@@ -37,7 +37,7 @@ const mockUser = {
   name: 'Анна Петрова',
   email: 'anna.petrova@example.com',
   phone: '+7 (777) 123-45-67',
-  avatar: require('@/assets/images/placeholder-user.jpg'),
+  avatar: require('@/assets/images/placeholder_gym4.jpg'),
   memberSince: '2023',
   subscription: {
     type: 'Семейная подписка',
