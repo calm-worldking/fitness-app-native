@@ -32,27 +32,51 @@ export default function RootLayout() {
   useEffect(() => {
     const getSession = async () => {
       try {
+        // Проверяем, что Supabase доступен
+        if (!supabase) {
+          console.warn('Supabase not available, running in offline mode');
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase.auth.getSession();
-        if (error) setErrorMsg(error.message);
+        if (error) {
+          console.warn('Supabase auth error:', error.message);
+          setErrorMsg(error.message);
+        }
         setUser(data?.session?.user ?? null);
         setLoading(false);
       } catch (e: any) {
+        console.warn('Supabase initialization error:', e.message);
         setErrorMsg(e.message || 'Unknown error');
         setLoading(false);
       }
     };
     getSession();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+
+    // Безопасно подписываемся на изменения аутентификации
+    try {
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+      });
+      return () => {
+        listener.subscription.unsubscribe();
+      };
+    } catch (e) {
+      console.warn('Failed to set up auth listener:', e);
+    }
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+      setUser(null);
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
   };
 
   const handleSplashFinish = () => {
@@ -73,12 +97,9 @@ export default function RootLayout() {
     );
   }
 
+  // Даже если есть ошибка с Supabase, продолжаем работу приложения
   if (errorMsg) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#FF6246" />
-      </View>
-    );
+    console.warn('Supabase error, continuing in offline mode:', errorMsg);
   }
 
   return (

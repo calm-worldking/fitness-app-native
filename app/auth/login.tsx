@@ -38,19 +38,29 @@ export default function LoginScreen() {
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+    if (!email || !password) {
       Alert.alert('Ошибка', 'Пожалуйста, заполните все поля');
       return;
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    
-    if (error) {
-      Alert.alert('Ошибка входа', error.message);
-    } else {
-      router.replace('/(tabs)');
+    try {
+      if (!supabase) {
+        Alert.alert('Ошибка', 'Сервис временно недоступен. Попробуйте позже.');
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        Alert.alert('Ошибка входа', error.message);
+      } else {
+        router.replace('/');
+      }
+    } catch (error: any) {
+      Alert.alert('Ошибка', error.message || 'Произошла ошибка при входе');
+    } finally {
+      setLoading(false);
     }
   };
 
