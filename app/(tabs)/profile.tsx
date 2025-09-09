@@ -1,19 +1,24 @@
 import { Logo } from '@/components/Logo';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
+import { AppHeader } from '@/components/AppHeader';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { api } from '@/lib/api';
+import { notificationService } from '@/lib/notifications';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../_layout';
@@ -31,35 +36,6 @@ const SUCCESS = '#4CAF50';
 const WARNING = '#FFD700';
 const HEADER_DARK = '#0D1F2C';
 
-// Моковые данные пользователя
-const mockUser = {
-  id: '1',
-  name: 'Анна Петрова',
-  email: 'anna.petrova@example.com',
-  phone: '+7 (777) 123-45-67',
-  avatar: require('@/assets/images/placeholder_gym4.jpg'),
-  memberSince: '2023',
-  subscription: {
-    type: 'Семейная подписка',
-    status: 'Активна',
-    expiresAt: '15 января 2025',
-    membersCount: 3,
-    maxMembers: 4,
-  },
-  stats: {
-    totalWorkouts: 156,
-    thisMonth: 12,
-    totalHours: 234,
-    streak: 7,
-    favoriteWorkout: 'Йога',
-  },
-  achievements: [
-    { id: '1', title: 'Первая неделя', icon: 'star', color: WARNING, unlocked: true },
-    { id: '2', title: '50 тренировок', icon: 'fitness-center', color: PRIMARY, unlocked: true },
-    { id: '3', title: 'Йога мастер', icon: 'self-improvement', color: SECONDARY, unlocked: true },
-    { id: '4', title: '100 тренировок', icon: 'emoji-events', color: SUCCESS, unlocked: false },
-  ],
-};
 
 // Настройки приложения
 const settingsOptions = [
@@ -68,23 +44,14 @@ const settingsOptions = [
     items: [
       { icon: 'edit', title: 'Редактировать профиль', subtitle: 'Имя, фото, контакты' },
       { icon: 'security', title: 'Безопасность', subtitle: 'Пароль, двухфакторная аутентификация' },
-      { icon: 'family-restroom', title: 'Семейная подписка', subtitle: 'Управление участниками' },
+      { icon: 'groups', title: 'Семейная подписка', subtitle: 'Управление участниками' },
     ]
   },
   {
-    section: 'Предпочтения',
+    section: 'Уведомления',
     items: [
-      { icon: 'notifications', title: 'Уведомления', subtitle: 'Push, email, SMS' },
-      { icon: 'language', title: 'Язык', subtitle: 'Русский' },
-      { icon: 'dark-mode', title: 'Тема', subtitle: 'Светлая' },
-    ]
-  },
-  {
-    section: 'Данные',
-    items: [
-      { icon: 'analytics', title: 'Статистика', subtitle: 'Подробная аналитика тренировок' },
-      { icon: 'download', title: 'Экспорт данных', subtitle: 'Скачать данные о тренировках' },
-      { icon: 'backup', title: 'Резервные копии', subtitle: 'Синхронизация с облаком' },
+      { icon: 'notifications', title: 'Напоминания о тренировках', subtitle: 'За 1 и 2 часа до занятия' },
+      { icon: 'settings', title: 'Настройки уведомлений', subtitle: 'Управление разрешениями' },
     ]
   },
   {
@@ -97,17 +64,51 @@ const settingsOptions = [
   },
 ];
 
-export default function ProfileScreen() {
+function ProfileScreenContent() {
   const { user, signOut } = useUser();
+  const { activeSubscription, loadSubscriptionData } = useSubscription();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState({
+    totalWorkouts: 0,
+    thisMonth: 0,
+    totalHours: 0,
+    weekStreak: 0,
+    favoriteWorkout: '-',
+    completedBookings: 0,
+    cancelledBookings: 0,
+  });
   const insets = useSafeAreaInsets();
+
+  const loadUserStats = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      console.log('📊 Loading user stats...');
+      const stats = await api.getUserStats();
+      console.log('📊 User stats loaded:', stats);
+      setUserStats(stats);
+    } catch (error) {
+      console.log('❌ Failed to load user stats:', error);
+    }
+  }, [user]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise(res => setTimeout(res, 1000));
+    await Promise.all([
+      loadSubscriptionData(),
+      loadUserStats(),
+      new Promise(res => setTimeout(res, 1000))
+    ]);
     setRefreshing(false);
   };
+
+  // Загружаем статистику при монтировании компонента
+  useEffect(() => {
+    if (user) {
+      loadUserStats();
+    }
+  }, [user, loadUserStats]);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -115,14 +116,298 @@ export default function ProfileScreen() {
       'Вы уверены, что хотите выйти?',
       [
         { text: 'Отмена', style: 'cancel' },
-        { text: 'Выйти', style: 'destructive', onPress: signOut }
+        { text: 'Выйти', style: 'destructive', onPress: async () => {
+          await signOut();
+          // Перезагружаем приложение для сброса состояния
+          router.replace('/');
+        }}
       ]
     );
   };
 
+  const handleHelpPress = () => {
+    Alert.alert(
+      'Справка',
+      'Выберите, какую помощь вам нужна:',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Как записаться на занятие', 
+          onPress: () => {
+            Alert.alert(
+              'Как записаться на занятие',
+              '1. Найдите подходящий зал в разделе "Залы"\n2. Выберите интересующее занятие\n3. Нажмите "Записаться"\n4. Подтвердите бронирование\n\nНе забудьте прийти за 10-15 минут до начала!'
+            );
+          }
+        },
+        { 
+          text: 'Как отменить занятие', 
+          onPress: () => {
+            Alert.alert(
+              'Как отменить занятие',
+              '1. Перейдите в раздел "Расписание"\n2. Найдите ваше бронирование\n3. Нажмите "Отменить"\n4. Подтвердите отмену\n\nОтмена возможна не позднее чем за 2 часа до начала занятия.'
+            );
+          }
+        },
+        { 
+          text: 'Проблемы с подпиской', 
+          onPress: () => {
+            Alert.alert(
+              'Проблемы с подпиской',
+              'Если у вас проблемы с подпиской:\n\n• Проверьте статус в разделе "Подписка"\n• Убедитесь, что подписка активна\n• Проверьте срок действия\n\nЕсли проблема не решается, обратитесь в поддержку.'
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const handleFeedbackPress = () => {
+    Alert.alert(
+      'Обратная связь',
+      'Мы ценим ваше мнение! Как вы хотите оставить отзыв?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Оценить в App Store', 
+          onPress: () => {
+            Alert.alert(
+              'Спасибо!',
+              'Ваша оценка поможет нам улучшить приложение. Перейдите в App Store для оставления отзыва.'
+            );
+          }
+        },
+        { 
+          text: 'Написать отзыв', 
+          onPress: () => {
+            Alert.alert(
+              'Отзыв',
+              'Напишите ваш отзыв о приложении. Что вам нравится? Что можно улучшить?',
+              [
+                { text: 'Отмена', style: 'cancel' },
+                { 
+                  text: 'Отправить', 
+                  onPress: () => {
+                    Alert.alert(
+                      'Спасибо!',
+                      'Ваш отзыв отправлен. Мы обязательно его рассмотрим!'
+                    );
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBugReportPress = () => {
+    Alert.alert(
+      'Сообщить о проблеме',
+      'Опишите проблему, с которой вы столкнулись:',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Приложение не работает', 
+          onPress: () => {
+            Alert.alert(
+              'Техническая проблема',
+              'Попробуйте:\n\n1. Перезапустить приложение\n2. Проверить интернет-соединение\n3. Обновить приложение\n\nЕсли проблема остается, опишите её подробнее.',
+              [
+                { text: 'Отмена', style: 'cancel' },
+                { 
+                  text: 'Отправить отчет', 
+                  onPress: () => {
+                    Alert.alert(
+                      'Отчет отправлен',
+                      'Спасибо за сообщение! Мы исправим проблему в ближайшее время.'
+                    );
+                  }
+                }
+              ]
+            );
+          }
+        },
+        { 
+          text: 'Ошибка при бронировании', 
+          onPress: () => {
+            Alert.alert(
+              'Проблема с бронированием',
+              'Опишите, что именно происходит при попытке записаться на занятие:',
+              [
+                { text: 'Отмена', style: 'cancel' },
+                { 
+                  text: 'Отправить отчет', 
+                  onPress: () => {
+                    Alert.alert(
+                      'Отчет отправлен',
+                      'Мы разберемся с проблемой бронирования и свяжемся с вами.'
+                    );
+                  }
+                }
+              ]
+            );
+          }
+        },
+        { 
+          text: 'Другая проблема', 
+          onPress: () => {
+            Alert.alert(
+              'Другая проблема',
+              'Опишите вашу проблему максимально подробно:',
+              [
+                { text: 'Отмена', style: 'cancel' },
+                { 
+                  text: 'Отправить', 
+                  onPress: () => {
+                    Alert.alert(
+                      'Спасибо!',
+                      'Ваше сообщение получено. Мы ответим в течение 24 часов.'
+                    );
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const handleWorkoutRemindersPress = async () => {
+    try {
+      const scheduledNotifications = await notificationService.getScheduledNotifications();
+      const workoutNotifications = scheduledNotifications.filter(
+        notification => notification.content.data?.classId
+      );
+
+      if (workoutNotifications.length === 0) {
+        Alert.alert(
+          'Напоминания о тренировках',
+          'У вас нет запланированных напоминаний о тренировках.\n\nНапоминания автоматически создаются при бронировании занятий за 1 и 2 часа до начала.',
+          [{ text: 'Понятно', style: 'default' }]
+        );
+        return;
+      }
+
+      const message = `У вас запланировано ${workoutNotifications.length} напоминаний о тренировках:\n\n` +
+        workoutNotifications.map(notification => {
+          const data = notification.content.data as any;
+          const startTime = new Date(data.startTime);
+          const type = data.type === '1hour' ? 'за 1 час' : 'за 2 часа';
+          return `• ${data.classTitle} - ${type} (${startTime.toLocaleDateString('ru-RU')})`;
+        }).join('\n');
+
+      Alert.alert(
+        'Напоминания о тренировках',
+        message,
+        [
+          { text: 'Понятно', style: 'default' },
+          { 
+            text: 'Отменить все', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await notificationService.cancelAllNotifications();
+                Alert.alert('Готово', 'Все напоминания отменены');
+              } catch {
+                Alert.alert('Ошибка', 'Не удалось отменить напоминания');
+              }
+            }
+          }
+        ]
+      );
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось загрузить информацию о напоминаниях');
+    }
+  };
+
+  const handleNotificationSettingsPress = async () => {
+    try {
+      const permissions = await notificationService.getNotificationPermissions();
+      
+      if (permissions.status === 'granted') {
+        Alert.alert(
+          'Настройки уведомлений',
+          'Уведомления включены ✅\n\nВы получаете напоминания о тренировках за 1 и 2 часа до начала занятий.',
+          [
+            { text: 'Понятно', style: 'default' },
+            { 
+              text: 'Отключить', 
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await notificationService.cancelAllNotifications();
+                  Alert.alert('Готово', 'Все уведомления отключены');
+                } catch {
+                  Alert.alert('Ошибка', 'Не удалось отключить уведомления');
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Настройки уведомлений',
+          'Уведомления отключены ❌\n\nДля получения напоминаний о тренировках необходимо разрешить уведомления.',
+          [
+            { text: 'Отмена', style: 'cancel' },
+            { 
+              text: 'Включить', 
+              onPress: async () => {
+                try {
+                  const result = await notificationService.requestNotificationPermissions();
+                  if (result.status === 'granted') {
+                    Alert.alert('Готово', 'Уведомления включены! Теперь вы будете получать напоминания о тренировках.');
+                  } else {
+                    Alert.alert('Ошибка', 'Разрешение на уведомления не предоставлено');
+                  }
+                } catch {
+                  Alert.alert('Ошибка', 'Не удалось включить уведомления');
+                }
+              }
+            }
+          ]
+        );
+      }
+    } catch {
+      Alert.alert('Ошибка', 'Не удалось проверить настройки уведомлений');
+    }
+  };
+
   const handleSettingPress = (setting: any) => {
     console.log('Setting pressed:', setting.title);
-    // Здесь будет навигация к соответствующим экранам настроек
+    
+    // Навигация к соответствующим экранам настроек
+    switch (setting.title) {
+      case 'Редактировать профиль':
+        router.push('/profile/edit');
+        break;
+      case 'Безопасность':
+        router.push('/profile/change-password');
+        break;
+      case 'Семейная подписка':
+        router.push('/(tabs)/subscription' as any);
+        break;
+      case 'Справка':
+        handleHelpPress();
+        break;
+      case 'Обратная связь':
+        handleFeedbackPress();
+        break;
+      case 'Сообщить о проблеме':
+        handleBugReportPress();
+        break;
+      case 'Напоминания о тренировках':
+        handleWorkoutRemindersPress();
+        break;
+      case 'Настройки уведомлений':
+        handleNotificationSettingsPress();
+        break;
+      default:
+        Alert.alert('Скоро', `${setting.title} будет доступен в следующих версиях`);
+    }
   };
 
   // Если пользователь не авторизован
@@ -131,12 +416,7 @@ export default function ProfileScreen() {
       <View style={styles.container}>
         <StatusBar backgroundColor={HEADER_DARK} barStyle="light-content" translucent={false} />
         
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Logo width={120} height={36} />
-          <TouchableOpacity style={styles.notificationButton}>
-            <MaterialIcons name="notifications-none" size={28} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <AppHeader />
         
         <ScrollView
           style={styles.scrollView}
@@ -181,24 +461,50 @@ export default function ProfileScreen() {
             </View>
           </View>
         </ScrollView>
+
       </View>
     );
   }
 
-  // Используем моковые данные для демонстрации
-  const currentUser = mockUser;
+  // Используем реальные данные пользователя или моковые данные как fallback
+  const currentUser = {
+    id: user?.id || 'guest',
+    name: user?.name || 'Гость',
+    email: user?.email || 'guest@example.com',
+    phone: user?.phone || '',
+    avatar: require('@/assets/images/placeholder_gym4.jpg'),
+    memberSince: '2024',
+    subscription: activeSubscription ? {
+      type: activeSubscription.planType === 'gold' ? 'Gold Pass' : 'Silver Pass',
+      status: activeSubscription.status === 'active' ? 'Активна' : 
+              activeSubscription.status === 'frozen' ? 'Заморожена' :
+              activeSubscription.status === 'cancelled' ? 'Отменена' : 'Неактивна',
+      expiresAt: new Date(activeSubscription.endDate).toLocaleDateString('ru-RU'),
+      membersCount: activeSubscription.peopleCount || 1,
+      maxMembers: activeSubscription.peopleCount || 1,
+    } : {
+      type: 'Без подписки',
+      status: 'Неактивна',
+      expiresAt: '-',
+      membersCount: 0,
+      maxMembers: 0,
+    },
+    stats: {
+      totalWorkouts: userStats.totalWorkouts,
+      thisMonth: userStats.thisMonth,
+      totalHours: userStats.totalHours,
+      streak: userStats.weekStreak,
+      favoriteWorkout: userStats.favoriteWorkout,
+    },
+    achievements: [],
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={HEADER_DARK} barStyle="light-content" translucent={false} />
       
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Logo width={120} height={36} />
-        <TouchableOpacity style={styles.notificationButton}>
-          <MaterialIcons name="notifications-none" size={28} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <AppHeader />
 
       <ScrollView
         style={styles.scrollView}
@@ -232,7 +538,10 @@ export default function ProfileScreen() {
                   </ThemedText>
                 </View>
               </View>
-              <TouchableOpacity style={styles.editButton}>
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={() => router.push('/profile/edit')}
+              >
                 <MaterialIcons name="edit" size={20} color={PRIMARY} />
               </TouchableOpacity>
             </View>
@@ -244,7 +553,7 @@ export default function ProfileScreen() {
           <View style={styles.subscriptionCard}>
             <View style={styles.subscriptionHeader}>
               <View style={styles.subscriptionIcon}>
-                <MaterialIcons name="family-restroom" size={24} color={SECONDARY} />
+                <MaterialIcons name="groups" size={24} color={SECONDARY} />
               </View>
               <View style={styles.subscriptionInfo}>
                 <ThemedText type="defaultSemiBold" style={styles.subscriptionType}>
@@ -256,7 +565,7 @@ export default function ProfileScreen() {
               </View>
               <TouchableOpacity 
                 style={styles.manageButton}
-                onPress={() => router.push('/family/subscription' as any)}
+                onPress={() => router.push('/(tabs)/subscription' as any)}
               >
                 <ThemedText style={styles.manageButtonText}>Управление</ThemedText>
               </TouchableOpacity>
@@ -310,11 +619,11 @@ export default function ProfileScreen() {
             </View>
             
             <View style={styles.statCard}>
-              <MaterialIcons name="local-fire-department" size={24} color={WARNING} />
+              <MaterialIcons name="whatshot" size={24} color={WARNING} />
               <ThemedText type="heading3" style={styles.statValue}>
                 {currentUser.stats.streak}
               </ThemedText>
-              <ThemedText style={styles.statLabel}>Дней подряд</ThemedText>
+              <ThemedText style={styles.statLabel}>Недель подряд</ThemedText>
             </View>
           </View>
         </View>
@@ -335,7 +644,7 @@ export default function ProfileScreen() {
             showsHorizontalScrollIndicator={false}
             style={styles.achievementsList}
           >
-            {currentUser.achievements.map((achievement) => (
+            {(currentUser.achievements || []).map((achievement: any) => (
               <View 
                 key={achievement.id} 
                 style={[
@@ -785,3 +1094,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 }); 
+
+export default function ProfileScreen() {
+  return <ProfileScreenContent />;
+}

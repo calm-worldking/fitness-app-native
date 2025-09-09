@@ -1,7 +1,7 @@
 import { Logo } from '@/components/Logo';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -13,6 +13,7 @@ import {
     ScrollView,
     StatusBar,
     StyleSheet,
+    Text,
     TextInput,
     TouchableOpacity,
     View
@@ -30,7 +31,7 @@ const TEXT_MUTED = '#737373';
 const SUCCESS = '#4CAF50';
 const ERROR = '#FF3B30';
 
-export default function RegisterScreen() {
+function RegisterScreenContent() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -73,29 +74,17 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!validateForm()) return;
-
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ 
-      email: formData.email, 
-      password: formData.password,
-      options: {
-        data: {
-          name: formData.name,
-        }
-      }
-    });
-    setLoading(false);
-    
-    if (error) {
-      Alert.alert('Ошибка регистрации', error.message);
-    } else {
-      Alert.alert(
-        'Успех!', 
-        'Регистрация прошла успешно! Проверьте email для подтверждения аккаунта.',
-        [
-          { text: 'ОК', onPress: () => router.replace('/auth/login') }
-        ]
-      );
+    try {
+      await api.register(formData.name, formData.email, formData.password);
+      // После успешной регистрации перенаправляем на страницу входа
+      Alert.alert('Успех!', 'Регистрация прошла успешно! Теперь вы можете войти в систему.', [
+        { text: 'ОК', onPress: () => router.replace('/auth/login') }
+      ])
+    } catch (e: any) {
+      Alert.alert('Ошибка регистрации', e?.message || 'Не удалось создать аккаунт');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -133,16 +122,16 @@ export default function RegisterScreen() {
           <ThemedText type="heading1" style={styles.title}>
             Создать аккаунт
           </ThemedText>
-          <ThemedText style={styles.subtitle}>
+          <Text style={styles.subtitle}>
             Присоединяйтесь к семье здорового образа жизни
-          </ThemedText>
+          </Text>
         </View>
 
         {/* Форма регистрации */}
         <View style={styles.formSection}>
           {/* Имя */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Полное имя</ThemedText>
+            <Text style={styles.inputLabel}>Полное имя</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="person" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -158,7 +147,7 @@ export default function RegisterScreen() {
 
           {/* Email */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Email</ThemedText>
+            <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="email" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -176,7 +165,7 @@ export default function RegisterScreen() {
 
           {/* Пароль */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Пароль</ThemedText>
+            <Text style={styles.inputLabel}>Пароль</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="lock" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -203,7 +192,7 @@ export default function RegisterScreen() {
 
           {/* Подтверждение пароля */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Подтвердите пароль</ThemedText>
+            <Text style={styles.inputLabel}>Подтвердите пароль</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="lock-outline" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -239,12 +228,12 @@ export default function RegisterScreen() {
               )}
             </View>
             <View style={styles.checkboxText}>
-              <ThemedText style={styles.termsText}>
+              <Text style={styles.termsText}>
                 Я согласен с{' '}
-                <ThemedText style={styles.termsLink}>Условиями использования</ThemedText>
+                <Text style={styles.termsLink}>Условиями использования</Text>
                 {' '}и{' '}
-                <ThemedText style={styles.termsLink}>Политикой конфиденциальности</ThemedText>
-              </ThemedText>
+                <Text style={styles.termsLink}>Политикой конфиденциальности</Text>
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -257,10 +246,10 @@ export default function RegisterScreen() {
             {loading ? (
               <View style={styles.loadingContainer}>
                 <MaterialIcons name="hourglass-empty" size={20} color={CARD_BG} />
-                <ThemedText style={styles.registerButtonText}>Создание...</ThemedText>
+                <Text style={styles.registerButtonText}>Создание...</Text>
               </View>
             ) : (
-              <ThemedText style={styles.registerButtonText}>Создать аккаунт</ThemedText>
+              <Text style={styles.registerButtonText}>Создать аккаунт</Text>
             )}
           </Button>
         </View>
@@ -268,7 +257,7 @@ export default function RegisterScreen() {
         {/* Разделитель */}
         <View style={styles.dividerSection}>
           <View style={styles.dividerLine} />
-          <ThemedText style={styles.dividerText}>или</ThemedText>
+          <Text style={styles.dividerText}>или</Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -279,7 +268,7 @@ export default function RegisterScreen() {
             onPress={() => handleSocialRegister('Google')}
           >
             <MaterialIcons name="login" size={20} color={TEXT_DARK} />
-            <ThemedText style={styles.socialButtonText}>Регистрация через Google</ThemedText>
+            <Text style={styles.socialButtonText}>Регистрация через Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -287,19 +276,19 @@ export default function RegisterScreen() {
             onPress={() => handleSocialRegister('Apple')}
           >
             <MaterialIcons name="smartphone" size={20} color={TEXT_DARK} />
-            <ThemedText style={styles.socialButtonText}>Регистрация через Apple</ThemedText>
+            <Text style={styles.socialButtonText}>Регистрация через Apple</Text>
           </TouchableOpacity>
         </View>
 
         {/* Вход */}
         <View style={styles.loginSection}>
-          <ThemedText style={styles.loginText}>
+          <Text style={styles.loginText}>
             Уже есть аккаунт?{' '}
-          </ThemedText>
+          </Text>
           <TouchableOpacity onPress={() => router.push('/auth/login')}>
-            <ThemedText style={styles.loginLink}>
+            <Text style={styles.loginLink}>
               Войти
-            </ThemedText>
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -310,31 +299,31 @@ export default function RegisterScreen() {
           </ThemedText>
           
           <View style={styles.benefitItem}>
-            <MaterialIcons name="family-restroom" size={20} color={PRIMARY} />
-            <ThemedText style={styles.benefitText}>
+            <MaterialIcons name="groups" size={20} color={PRIMARY} />
+            <Text style={styles.benefitText}>
               Семейная подписка для всей семьи
-            </ThemedText>
+            </Text>
           </View>
           
           <View style={styles.benefitItem}>
             <MaterialIcons name="fitness-center" size={20} color={SECONDARY} />
-            <ThemedText style={styles.benefitText}>
+            <Text style={styles.benefitText}>
               Доступ к премиум залам по всему городу
-            </ThemedText>
+            </Text>
           </View>
           
           <View style={styles.benefitItem}>
             <MaterialIcons name="analytics" size={20} color={SUCCESS} />
-            <ThemedText style={styles.benefitText}>
+            <Text style={styles.benefitText}>
               Персональная статистика и достижения
-            </ThemedText>
+            </Text>
           </View>
 
           <View style={styles.benefitItem}>
             <MaterialIcons name="groups" size={20} color="#A259FF" />
-            <ThemedText style={styles.benefitText}>
+            <Text style={styles.benefitText}>
               Групповые тренировки и мотивация
-            </ThemedText>
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -566,3 +555,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 }); 
+
+export default function RegisterScreen() {
+  return <RegisterScreenContent />;
+}

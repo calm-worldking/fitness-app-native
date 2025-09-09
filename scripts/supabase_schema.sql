@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.gyms (
   address TEXT,
   services TEXT[] DEFAULT '{}',
   photos TEXT[] DEFAULT '{}', -- массив ссылок на фото
+  owner_uid UUID REFERENCES public.users(uid),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -144,24 +145,33 @@ CREATE POLICY "User can view their bookings"
   ON public.bookings FOR SELECT
   USING (user_id = auth.uid());
 
+-- bookings: владелец зала видит бронирования своих залов (для партнёрской аналитики)
+CREATE POLICY "Owner can view bookings of their gyms"
+  ON public.bookings FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.gyms g
+      WHERE g.gym_id = bookings.gym_id AND g.owner_uid = auth.uid()
+    )
+  );
+
 -- gyms: публичный просмотр
 CREATE POLICY "Allow public read access for gyms"
   ON public.gyms FOR SELECT
   USING (true);
 
--- gyms: INSERT/UPDATE/DELETE — только администратор (пример: по email или отдельному полю is_admin)
--- Здесь пример для пользователя с определённым email (замени на свой email или добавь поле is_admin в users)
-CREATE POLICY "Admin can insert gym"
+-- gyms: INSERT/UPDATE/DELETE — только владелец (owner_uid)
+CREATE POLICY "Owner can insert gym"
   ON public.gyms FOR INSERT
-  WITH CHECK (auth.email() = 'admin@example.com');
+  WITH CHECK (owner_uid = auth.uid());
 
-CREATE POLICY "Admin can update gym"
+CREATE POLICY "Owner can update gym"
   ON public.gyms FOR UPDATE
-  USING (auth.email() = 'admin@example.com');
+  USING (owner_uid = auth.uid());
 
-CREATE POLICY "Admin can delete gym"
+CREATE POLICY "Owner can delete gym"
   ON public.gyms FOR DELETE
-  USING (auth.email() = 'admin@example.com');
+  USING (owner_uid = auth.uid());
 
 -- bookings: INSERT/UPDATE/DELETE — только сам пользователь
 CREATE POLICY "User can create booking"
@@ -182,6 +192,22 @@ VALUES
   ('Фитнес Центр', 'ул. Примерная, 123', ARRAY['Тренажерный зал', 'Бассейн', 'Сауна'], ARRAY['https://example.com/gym1-1.jpg', 'https://example.com/gym1-2.jpg']),
   ('Спортивный Клуб', 'пр. Спортивный, 45', ARRAY['Тренажерный зал', 'Групповые занятия'], ARRAY['https://example.com/gym2-1.jpg'])
 ON CONFLICT (gym_id) DO NOTHING;
+-- 12. Представление для партнёрской статистики
+CREATE OR REPLACE VIEW public.partner_stats AS
+SELECT
+  (
+    SELECT count(DISTINCT b.user_id)
+    FROM public.bookings b
+    WHERE b.gym_id IN (SELECT gym_id FROM public.gyms g WHERE g.owner_uid = auth.uid())
+  ) AS total_users,
+  (
+    SELECT count(*) FROM public.bookings b
+    WHERE b.gym_id IN (SELECT gym_id FROM public.gyms g WHERE g.owner_uid = auth.uid())
+  ) AS total_bookings,
+  (
+    SELECT count(*) FROM public.gyms g WHERE g.owner_uid = auth.uid()
+  ) AS gyms_count;
+
 
 -- 10. Индексы для ускорения поиска (опционально)
 CREATE INDEX IF NOT EXISTS idx_family_members_family_id ON public.family_members(family_id);

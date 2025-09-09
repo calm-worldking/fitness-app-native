@@ -1,179 +1,133 @@
-import { Logo } from '@/components/Logo';
-import { ThemedText } from '@/components/ThemedText';
-import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import React, { useEffect, useRef } from 'react';
-import {
-    Animated,
-    Dimensions,
-    StatusBar,
-    StyleSheet,
-    View
-} from 'react-native';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { ThemedText } from './ThemedText';
+import { BirgeGoLogo } from './BirgeGoLogo';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
-// Брендовые цвета
+// Брендовые цвета BIRGE GO
 const PRIMARY = '#FF6246';
 const SECONDARY = '#FF8843';
 const BG = '#FFE7D8';
 const CARD_BG = '#FFFFFF';
-const TEXT_DARK = '#000000';
-const TEXT_MUTED = '#737373';
+const DARK_ORANGE = '#E55A3A'; // Тёмно-оранжевый фон
 
 interface LoadingScreenProps {
-  onFinish?: () => void;
+  message?: string;
+  showLogo?: boolean;
 }
 
-export function LoadingScreen({ onFinish }: LoadingScreenProps) {
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const progressWidth = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
+export function LoadingScreen({ 
+  message = 'Загрузка...', 
+  showLogo = true 
+}: LoadingScreenProps) {
+  const slideValue = useRef(new Animated.Value(0)).current;
+  const scaleValue = useRef(new Animated.Value(0.8)).current;
+  const opacityValue = useRef(new Animated.Value(0)).current;
+  const pulseValue = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const startAnimation = () => {
-      // Анимация появления логотипа
-      Animated.parallel([
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 800,
+    // Анимация появления
+    const slideAnimation = Animated.timing(slideValue, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    });
+
+    // Анимация масштабирования
+    const scaleAnimation = Animated.sequence([
+      Animated.timing(scaleValue, {
+        toValue: 1.1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleValue, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    // Анимация прозрачности
+    const opacityAnimation = Animated.timing(opacityValue, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    });
+
+    // Анимация пульсации логотипа
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseValue, {
+          toValue: 1.05,
+          duration: 1500,
           useNativeDriver: true,
         }),
-        Animated.spring(logoScale, {
+        Animated.timing(pulseValue, {
           toValue: 1,
-          tension: 100,
-          friction: 8,
+          duration: 1500,
           useNativeDriver: true,
         }),
-      ]).start();
+      ])
+    );
 
-      // Анимация текста
-      setTimeout(() => {
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }).start();
-      }, 400);
+    slideAnimation.start();
+    scaleAnimation.start();
+    opacityAnimation.start();
+    pulseAnimation.start();
 
-      // Анимация прогресс-бара
-      setTimeout(() => {
-        Animated.timing(progressWidth, {
-          toValue: 100,
-          duration: 4000,
-          useNativeDriver: false,
-        }).start(() => {
-          // Завершение загрузки
-          setTimeout(() => {
-            onFinish?.();
-          }, 1000);
-        });
-      }, 800);
+    return () => {
+      slideAnimation.stop();
+      scaleAnimation.stop();
+      opacityAnimation.stop();
+      pulseAnimation.stop();
     };
-
-    startAnimation();
   }, []);
+
+  const slideY = slideValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [30, 0],
+  });
+
+  const opacity = opacityValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor={CARD_BG} barStyle="dark-content" />
-      
-      {/* Фоновое изображение */}
-      <Image 
-        source={require('@/assets/images/loading.jpg')} 
-        style={styles.backgroundImage}
-        contentFit="cover"
-      />
-      
-      {/* Оверлей */}
-      <View style={styles.overlay} />
-      
-      {/* Контент */}
-      <View style={styles.content}>
-        {/* Логотип */}
-        <Animated.View 
-          style={[
-            styles.logoContainer,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }]
-            }
-          ]}
-        >
-          <Logo width={200} height={60} />
-        </Animated.View>
-        
-        {/* Текст приветствия */}
-        <Animated.View 
-          style={[
-            styles.textContainer,
-            { opacity: textOpacity }
-          ]}
-        >
-          <ThemedText type="heading2" style={styles.welcomeText}>
-            Добро пожаловать в будущее фитнеса
-          </ThemedText>
-          <ThemedText style={styles.subtitleText}>
-            Семейные тренировки, персональный подход, максимальный результат
-          </ThemedText>
-        </Animated.View>
-        
-        {/* Прогресс-бар */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+      <Animated.View 
+        style={[
+          styles.content,
+          {
+            transform: [{ translateY: slideY }, { scale: scaleValue }],
+            opacity,
+          }
+        ]}
+      >
+        {/* Красивая эмблемка BIRGE GO */}
+        {showLogo && (
+          <View style={styles.logoContainer}>
             <Animated.View 
               style={[
-                styles.progressFill,
+                styles.logoWrapper,
                 {
-                  width: progressWidth.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ['0%', '100%'],
-                  }),
+                  transform: [{ scale: pulseValue }],
                 }
-              ]} 
-            />
+              ]}
+            >
+              <BirgeGoLogo 
+                width={280} 
+                height={85} 
+                variant="white"
+              />
+            </Animated.View>
           </View>
-          
-          <Animated.View 
-            style={[
-              styles.loadingTextContainer,
-              { opacity: textOpacity }
-            ]}
-          >
-            <ThemedText style={styles.loadingText}>Загружаем для вас лучшее...</ThemedText>
-          </Animated.View>
-        </View>
-        
-        {/* Иконки функций */}
-        <Animated.View 
-          style={[
-            styles.featuresContainer,
-            { opacity: textOpacity }
-          ]}
-        >
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: PRIMARY + '20' }]}>
-              <MaterialIcons name="family-restroom" size={24} color={PRIMARY} />
-            </View>
-            <ThemedText style={styles.featureText}>Семейная подписка</ThemedText>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: SECONDARY + '20' }]}>
-              <MaterialIcons name="fitness-center" size={24} color={SECONDARY} />
-            </View>
-            <ThemedText style={styles.featureText}>Безлимитные тренировки</ThemedText>
-          </View>
-          
-          <View style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: '#4CAF50' + '20' }]}>
-              <MaterialIcons name="analytics" size={24} color="#4CAF50" />
-            </View>
-            <ThemedText style={styles.featureText}>Отслеживание прогресса</ThemedText>
-          </View>
-        </Animated.View>
-      </View>
+        )}
+
+        {/* Сообщение */}
+        <ThemedText style={styles.message}>{message}</ThemedText>
+      </Animated.View>
     </View>
   );
 }
@@ -181,93 +135,29 @@ export function LoadingScreen({ onFinish }: LoadingScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CARD_BG,
-  },
-  backgroundImage: {
-    position: 'absolute',
-    width: screenWidth,
-    height: screenHeight,
-  },
-  overlay: {
-    position: 'absolute',
-    width: screenWidth,
-    height: screenHeight,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: DARK_ORANGE,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   },
   logoContainer: {
-    marginBottom: 40,
-  },
-  textContainer: {
-    alignItems: 'center',
-    marginBottom: 60,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: TEXT_DARK,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitleText: {
-    fontSize: 16,
-    color: TEXT_MUTED,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  progressContainer: {
-    width: '100%',
     alignItems: 'center',
     marginBottom: 40,
   },
-  progressBar: {
-    width: '80%',
-    height: 4,
-    backgroundColor: BG,
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: PRIMARY,
-    borderRadius: 2,
-  },
-  loadingTextContainer: {
+  logoWrapper: {
     alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    textAlign: 'center',
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  featureItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+    padding: 20,
   },
-  featureText: {
-    fontSize: 12,
-    color: TEXT_MUTED,
+
+  message: {
+    fontSize: 18,
+    color: CARD_BG,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+    opacity: 0.9,
   },
 }); 

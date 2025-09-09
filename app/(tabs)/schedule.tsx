@@ -1,726 +1,856 @@
+import { GymMap } from '@/components/GymMap';
 import { Logo } from '@/components/Logo';
-import { ThemedText } from '@/components/ThemedText';
-import { Button } from '@/components/ui/Button';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { ThemedView } from '@/components/ThemedView';
+import { AppHeader } from '@/components/AppHeader';
+import { api } from '@/lib/api';
+import { shareInviteLink, copyInviteLink } from '@/lib/linking';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
-    Dimensions,
-    RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
+    Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-// Брендовые цвета
+// Брендовые цвета BIRGE GO
 const PRIMARY = '#FF6246';
 const SECONDARY = '#FF8843';
-const BG = '#FFE7D8';
+const BG = '#FFFFFF'; // Белый фон как на главной
 const CARD_BG = '#FFFFFF';
 const TEXT_DARK = '#000000';
 const TEXT_MUTED = '#737373';
-const SUCCESS = '#4CAF50';
-const WARNING = '#FFD700';
-const ERROR = '#FF3B30';
 const HEADER_DARK = '#0D1F2C';
+const SUCCESS = '#4CAF50';
+const INFO = '#2196F3';
+const WARNING = '#FF9800';
+const SURFACE_LIGHT = '#F8F9FA';
+const BORDER_LIGHT = '#E9ECEF';
 
-// Дни недели
-const days = [
-  { key: 'mon', label: 'Пн', date: '18' },
-  { key: 'tue', label: 'Вт', date: '19' },
-  { key: 'wed', label: 'Ср', date: '20' },
-  { key: 'thu', label: 'Чт', date: '21' },
-  { key: 'fri', label: 'Пт', date: '22' },
-  { key: 'sat', label: 'Сб', date: '23' },
-  { key: 'sun', label: 'Вс', date: '24' },
-];
-
-// Типы занятий
-type WorkoutStatus = 'available' | 'booked' | 'completed' | 'cancelled' | 'full';
-
-interface ScheduleItem {
+interface BookedClass {
   id: string;
-  time: string;
   title: string;
-  trainer: string;
-  duration: number;
-  gym: string;
-  spots: {
-    available: number;
-    total: number;
+  date: string;
+  time: string;
+  duration: string;
+  gymName: string;
+  gymAddress: string;
+  gymRating: number;
+  canConfirmIn: number; // минуты до возможности подтверждения
+  location: {
+    lat: number;
+    lng: number;
   };
-  status: WorkoutStatus;
-  category: string;
-  price?: string;
 }
 
-// Данные расписания
-const scheduleData: { [key: string]: ScheduleItem[] } = {
-  mon: [
-    {
-      id: '1',
-      time: '07:00',
-      title: 'Утренняя йога',
-      trainer: 'Анна Петрова',
-      duration: 60,
-      gym: 'FitLife Центральный',
-      spots: { available: 8, total: 20 },
-      status: 'available',
-      category: 'Йога',
-    },
-    {
-      id: '2',
-      time: '10:00',
-      title: 'Силовая тренировка',
-      trainer: 'Михаил Иванов',
-      duration: 90,
-      gym: 'FitLife Центральный',
-      spots: { available: 2, total: 15 },
-      status: 'available',
-      category: 'Силовые',
-    },
-    {
-      id: '3',
-      time: '18:00',
-      title: 'Кроссфит',
-      trainer: 'Дмитрий Смирнов',
-      duration: 60,
-      gym: 'FitLife Восточный',
-      spots: { available: 0, total: 12 },
-      status: 'full',
-      category: 'Кроссфит',
-    },
-    {
-      id: '4',
-      time: '19:30',
-      title: 'Вечерняя растяжка',
-      trainer: 'София Козлова',
-      duration: 45,
-      gym: 'FitLife Центральный',
-      spots: { available: 15, total: 20 },
-      status: 'booked',
-      category: 'Стретчинг',
-    },
-  ],
-  tue: [
-    {
-      id: '5',
-      time: '08:00',
-      title: 'Пилатес',
-      trainer: 'Екатерина Волкова',
-      duration: 60,
-      gym: 'FitLife Южный',
-      spots: { available: 5, total: 15 },
-      status: 'available',
-      category: 'Пилатес',
-    },
-    {
-      id: '6',
-      time: '12:00',
-      title: 'Функциональный тренинг',
-      trainer: 'Алексей Морозов',
-      duration: 60,
-      gym: 'FitLife Центральный',
-      spots: { available: 3, total: 10 },
-      status: 'available',
-      category: 'Функциональный',
-    },
-  ],
-  wed: [
-    {
-      id: '7',
-      time: '09:00',
-      title: 'Аквааэробика',
-      trainer: 'Марина Белова',
-      duration: 45,
-      gym: 'FitLife Центральный',
-      spots: { available: 8, total: 12 },
-      status: 'available',
-      category: 'Водные виды',
-    },
-    {
-      id: '8',
-      time: '17:00',
-      title: 'Бокс',
-      trainer: 'Игорь Соколов',
-      duration: 90,
-      gym: 'FitLife Восточный',
-      spots: { available: 1, total: 8 },
-      status: 'completed',
-      category: 'Боевые искусства',
-    },
-  ],
-  thu: [],
-  fri: [],
-  sat: [],
-  sun: [],
-};
-
-// Статистика
-const stats = {
-  thisWeek: 4,
-  thisMonth: 12,
-  streak: 7,
-  totalHours: 28,
-};
-
-// Функция получения цвета статуса
-const getStatusColor = (status: WorkoutStatus) => {
-  switch (status) {
-    case 'available': return SUCCESS;
-    case 'booked': return PRIMARY;
-    case 'completed': return SUCCESS;
-    case 'cancelled': return ERROR;
-    case 'full': return TEXT_MUTED;
-    default: return TEXT_MUTED;
-  }
-};
-
-// Функция получения текста статуса
-const getStatusText = (status: WorkoutStatus) => {
-  switch (status) {
-    case 'available': return 'Доступно';
-    case 'booked': return 'Записан';
-    case 'completed': return 'Завершено';
-    case 'cancelled': return 'Отменено';
-    case 'full': return 'Места нет';
-    default: return '';
-  }
-};
-
 export default function ScheduleScreen() {
-  const [selectedDay, setSelectedDay] = useState('mon');
-  const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showGoogleCalendarBanner, setShowGoogleCalendarBanner] = useState(true);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise(res => setTimeout(res, 1000));
-    setRefreshing(false);
-  };
+  // Загрузка реальных данных о бронированиях
+  useEffect(() => {
+    const loadBookings = async () => {
+    try {
+      setLoading(true);
+        console.log('📡 Loading user bookings...');
+        
+        const result = await api.myBookings();
+        
+        console.log('📡 Bookings result:', JSON.stringify(result, null, 2));
+        
+        if (result.items && Array.isArray(result.items)) {
+          const transformedBookings: BookedClass[] = result.items
+            .map((booking: any) => {
+              console.log('📡 Processing booking:', JSON.stringify(booking, null, 2));
+              
+              // Проверяем структуру данных
+              if (!booking.class || !booking.class.startsAt || !booking.class.endsAt) {
+                console.log('📡 Invalid booking structure:', booking);
+                return null;
+              }
+              
+              const startDate = new Date(booking.class.startsAt);
+              const endDate = new Date(booking.class.endsAt);
+              const now = new Date();
+              
+              // Вычисляем время до возможности подтверждения (30 минут до начала)
+              const confirmDeadline = new Date(startDate.getTime() - 30 * 60 * 1000);
+              const canConfirmIn = Math.max(0, Math.floor((confirmDeadline.getTime() - now.getTime()) / (60 * 1000)));
+              
+              // Форматируем дату
+              const today = new Date();
+              const tomorrow = new Date(today);
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              
+              let dateText = '';
+              if (startDate.toDateString() === today.toDateString()) {
+                dateText = 'Сегодня';
+              } else if (startDate.toDateString() === tomorrow.toDateString()) {
+                dateText = 'Завтра';
+              } else {
+                dateText = startDate.toLocaleDateString('ru-RU', { 
+                  day: 'numeric', 
+                  month: 'long' 
+                });
+              }
+              
+              // Форматируем время
+              const timeText = `${startDate.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })} - ${endDate.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}`;
+              
+              // Вычисляем длительность
+              const durationMs = endDate.getTime() - startDate.getTime();
+              const durationHours = Math.floor(durationMs / (60 * 60 * 1000));
+              const durationMinutes = Math.floor((durationMs % (60 * 60 * 1000)) / (60 * 1000));
+              const durationText = durationHours > 0 
+                ? `${durationHours}ч ${durationMinutes > 0 ? durationMinutes + 'мин' : ''}`.trim()
+                : `${durationMinutes}мин`;
+          
+          return {
+                id: booking.id,
+                title: booking.class.title,
+                date: dateText,
+                time: timeText,
+                duration: durationText,
+                gymName: booking.class.gym.name,
+                gymAddress: booking.class.gym.address || '',
+                gymRating: booking.class.gym.rating || 0,
+                canConfirmIn,
+                location: {
+                  lat: booking.class.gym.latitude || 43.238949,
+                  lng: booking.class.gym.longitude || 76.889709,
+                },
+          };
+        })
+        .filter((booking): booking is BookedClass => booking !== null);
+      
+          setBookedClasses(transformedBookings);
+        } else {
+          setBookedClasses([]);
+        }
+      } catch (error) {
+        console.log('📱 Failed to load bookings:', error);
+      setBookedClasses([]);
+    } finally {
+      setLoading(false);
+    }
+      };
+  
+          loadBookings();
+    }, []);
 
-  const handleBookWorkout = (item: ScheduleItem) => {
-    if (item.status === 'available' && item.spots.available > 0) {
-      Alert.alert(
-        'Записаться на тренировку',
-        `${item.title} в ${item.time}\nТренер: ${item.trainer}\nПродолжительность: ${item.duration} мин`,
-        [
-          { text: 'Отмена', style: 'cancel' },
-          { text: 'Записаться', onPress: () => console.log('Записан на тренировку') }
-        ]
-      );
-    } else if (item.status === 'booked') {
-      Alert.alert(
-        'Отменить запись',
-        `Вы записаны на ${item.title} в ${item.time}`,
-        [
-          { text: 'Назад', style: 'cancel' },
-          { text: 'Отменить запись', style: 'destructive', onPress: () => console.log('Запись отменена') }
-        ]
-      );
+  // Обновляем данные при фокусе на экране
+  useFocusEffect(
+    useCallback(() => {
+      const refreshData = async () => {
+        try {
+          setLoading(true);
+          console.log('📡 Refreshing user bookings...');
+          
+          const result = await api.myBookings();
+          
+          if (result.items && Array.isArray(result.items)) {
+            const transformedBookings: BookedClass[] = result.items.map((booking: any) => {
+              const startDate = new Date(booking.class.startsAt);
+              const endDate = new Date(booking.class.endsAt);
+              const now = new Date();
+              
+              // Вычисляем время до возможности подтверждения (30 минут до начала)
+              const confirmDeadline = new Date(startDate.getTime() - 30 * 60 * 1000);
+              const canConfirmIn = Math.max(0, Math.floor((confirmDeadline.getTime() - now.getTime()) / (60 * 1000)));
+              
+              // Форматируем дату
+              const today = new Date();
+              const tomorrow = new Date(today);
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              
+              let dateText = '';
+              if (startDate.toDateString() === today.toDateString()) {
+                dateText = 'Сегодня';
+              } else if (startDate.toDateString() === tomorrow.toDateString()) {
+                dateText = 'Завтра';
+              } else {
+                dateText = startDate.toLocaleDateString('ru-RU', { 
+                  day: 'numeric', 
+                  month: 'long' 
+                });
+              }
+              
+              // Форматируем время
+              const timeText = `${startDate.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })} - ${endDate.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}`;
+              
+              // Вычисляем длительность
+              const durationMs = endDate.getTime() - startDate.getTime();
+              const durationHours = Math.floor(durationMs / (60 * 60 * 1000));
+              const durationMinutes = Math.floor((durationMs % (60 * 60 * 1000)) / (60 * 1000));
+              const durationText = durationHours > 0 
+                ? `${durationHours}ч ${durationMinutes > 0 ? durationMinutes + 'мин' : ''}`.trim()
+                : `${durationMinutes}мин`;
+              
+              return {
+                id: booking.id,
+                title: booking.class.title,
+                date: dateText,
+                time: timeText,
+                duration: durationText,
+                gymName: booking.class.gym.name,
+                gymAddress: booking.class.gym.address || '',
+                gymRating: booking.class.gym.rating || 0,
+                canConfirmIn,
+                location: {
+                  lat: booking.class.gym.latitude || 43.238949,
+                  lng: booking.class.gym.longitude || 76.889709,
+                },
+              };
+            });
+            
+            setBookedClasses(transformedBookings);
+          } else {
+            setBookedClasses([]);
+          }
+        } catch (error) {
+          console.log('📱 Failed to refresh bookings:', error);
+          setBookedClasses([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      refreshData();
+    }, [])
+  );
+
+  const refreshBookings = async () => {
+    try {
+      setLoading(true);
+      console.log('📡 Refreshing user bookings...');
+      
+      const result = await api.myBookings();
+      
+      if (result.items && Array.isArray(result.items)) {
+        const transformedBookings: BookedClass[] = result.items.map((booking: any) => {
+          const startDate = new Date(booking.class.startsAt);
+          const endDate = new Date(booking.class.endsAt);
+          const now = new Date();
+          
+          // Вычисляем время до возможности подтверждения (30 минут до начала)
+          const confirmDeadline = new Date(startDate.getTime() - 30 * 60 * 1000);
+          const canConfirmIn = Math.max(0, Math.floor((confirmDeadline.getTime() - now.getTime()) / (60 * 1000)));
+          
+          // Форматируем дату
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
+          let dateText = '';
+          if (startDate.toDateString() === today.toDateString()) {
+            dateText = 'Сегодня';
+          } else if (startDate.toDateString() === tomorrow.toDateString()) {
+            dateText = 'Завтра';
+          } else {
+            dateText = startDate.toLocaleDateString('ru-RU', { 
+              day: 'numeric', 
+              month: 'long' 
+            });
+          }
+          
+          // Форматируем время
+          const timeText = `${startDate.toLocaleTimeString('ru-RU', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })} - ${endDate.toLocaleTimeString('ru-RU', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}`;
+          
+          // Вычисляем длительность
+          const durationMs = endDate.getTime() - startDate.getTime();
+          const durationHours = Math.floor(durationMs / (60 * 60 * 1000));
+          const durationMinutes = Math.floor((durationMs % (60 * 60 * 1000)) / (60 * 1000));
+          const durationText = durationHours > 0 
+            ? `${durationHours}ч ${durationMinutes > 0 ? durationMinutes + 'мин' : ''}`.trim()
+            : `${durationMinutes}мин`;
+          
+          return {
+            id: booking.id,
+            title: booking.class.title,
+            date: dateText,
+            time: timeText,
+            duration: durationText,
+            gymName: booking.class.gym.name,
+            gymAddress: booking.class.gym.address || '',
+            gymRating: booking.class.gym.rating || 0,
+            canConfirmIn,
+            location: {
+              lat: booking.class.gym.latitude || 43.238949,
+              lng: booking.class.gym.longitude || 76.889709,
+            },
+          };
+        });
+        
+        setBookedClasses(transformedBookings);
+      } else {
+        setBookedClasses([]);
+      }
+    } catch (error) {
+      console.log('📱 Failed to refresh bookings:', error);
+      setBookedClasses([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const selectedDayData = scheduleData[selectedDay] || [];
+  const handleCancelClass = async (classId: string) => {
+    Alert.alert(
+      'Отмена занятия',
+      'Вы уверены, что хотите отменить это занятие?',
+      [
+        { text: 'Нет', style: 'cancel' },
+        { 
+          text: 'Отменить',
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              console.log('📡 Canceling booking:', classId);
+              await api.cancelBooking(classId);
+              
+              // Обновляем список бронирований
+              await refreshBookings();
+              
+              Alert.alert('Успешно', 'Занятие отменено!');
+            } catch (error) {
+              console.log('📱 Failed to cancel booking:', error);
+              Alert.alert('Ошибка', 'Не удалось отменить занятие. Попробуйте еще раз.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleInvite = (classId: string) => {
+    const classData = bookedClasses.find(cls => cls.id === classId);
+    if (!classData) {
+      Alert.alert('Ошибка', 'Информация о занятии не найдена');
+      return;
+    }
+
+    Alert.alert(
+      'Пригласить друга',
+      'Выберите способ отправки приглашения',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Поделиться',
+          onPress: () => {
+            shareInviteLink({
+              classId: classData.id,
+              className: classData.title,
+              gymName: classData.gymName,
+              date: classData.date,
+              time: classData.time,
+              duration: classData.duration,
+            });
+          },
+        },
+        {
+          text: 'Скопировать ссылку',
+          onPress: () => {
+            copyInviteLink({
+              classId: classData.id,
+              className: classData.title,
+              gymName: classData.gymName,
+              date: classData.date,
+              time: classData.time,
+              duration: classData.duration,
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRoute = (classId: string) => {
+    const classData = bookedClasses.find(cls => cls.id === classId);
+    if (classData) {
+      // Здесь будет интеграция с картами
+      Alert.alert('Маршрут', `Построение маршрута к ${classData.gymName}`);
+    }
+  };
+
+  const handleGoogleCalendar = () => {
+    Alert.alert('Google Calendar', 'Интеграция с Google Calendar будет доступна в следующем обновлении');
+  };
+
+  const formatTimeUntil = (minutes: number) => {
+    if (minutes <= 0) return 'Можно подтвердить';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `Подтвердить можно через ${hours}ч ${mins}мин`;
+    }
+    return `Подтвердить можно через ${mins} мин`;
+  };
+
+
 
   return (
-    <View style={styles.container}>
+    <ThemedView style={styles.container}>
       <StatusBar backgroundColor={HEADER_DARK} barStyle="light-content" translucent={false} />
       
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Logo width={120} height={36} />
-        <TouchableOpacity style={styles.notificationButton}>
-          <MaterialIcons name="notifications-none" size={28} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <AppHeader />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[PRIMARY]}
-            tintColor={PRIMARY}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Статистика */}
-        <View style={styles.statsSection}>
-          <ThemedText type="heading2" style={styles.sectionTitle}>
-            Ваша активность
-          </ThemedText>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <MaterialIcons name="fitness-center" size={24} color={PRIMARY} />
-              <ThemedText type="heading3" style={styles.statValue}>{stats.thisWeek}</ThemedText>
-              <ThemedText style={styles.statLabel}>Тренировок на неделе</ThemedText>
-            </View>
-            <View style={styles.statCard}>
-              <MaterialIcons name="local-fire-department" size={24} color={SECONDARY} />
-              <ThemedText type="heading3" style={styles.statValue}>{stats.streak}</ThemedText>
-              <ThemedText style={styles.statLabel}>Дней подряд</ThemedText>
-            </View>
-            <View style={styles.statCard}>
-              <MaterialIcons name="schedule" size={24} color={SUCCESS} />
-              <ThemedText type="heading3" style={styles.statValue}>{stats.totalHours}</ThemedText>
-              <ThemedText style={styles.statLabel}>Часов в месяце</ThemedText>
-            </View>
+      {/* Page Title */}
+      <View style={styles.pageTitleContainer}>
+        <Text style={styles.pageTitle}>
+          Расписание
+        </Text>
+        </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="schedule" size={48} color={PRIMARY} />
+            <Text style={styles.loadingText}>Загрузка расписания...</Text>
           </View>
-        </View>
-
-        {/* Календарь дней */}
-        <View style={styles.calendarSection}>
-          <ThemedText type="heading2" style={styles.sectionTitle}>
-            Декабрь 2024
-          </ThemedText>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.daysScroll}
-          >
-            {days.map((day) => (
-              <TouchableOpacity
-                key={day.key}
-                style={[
-                  styles.dayCard,
-                  selectedDay === day.key && styles.dayCardActive
-                ]}
-                onPress={() => setSelectedDay(day.key)}
-              >
-                <ThemedText style={[
-                  styles.dayLabel,
-                  selectedDay === day.key && styles.dayLabelActive
-                ]}>
-                  {day.label}
-                </ThemedText>
-                <ThemedText style={[
-                  styles.dayDate,
-                  selectedDay === day.key && styles.dayDateActive
-                ]}>
-                  {day.date}
-                </ThemedText>
-                {scheduleData[day.key]?.length > 0 && (
-                  <View style={[
-                    styles.dayIndicator,
-                    selectedDay === day.key && styles.dayIndicatorActive
-                  ]} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Расписание на выбранный день */}
-        <View style={styles.scheduleSection}>
-          <View style={styles.sectionHeader}>
-            <ThemedText type="heading2" style={styles.sectionTitle}>
-              Расписание на {days.find(d => d.key === selectedDay)?.label}
-            </ThemedText>
-            <TouchableOpacity>
-              <MaterialIcons name="add" size={24} color={PRIMARY} />
+        ) : (
+          <>
+            {/* Google Calendar Banner */}
+            {showGoogleCalendarBanner && (
+          <View style={styles.calendarBanner}>
+            <View style={styles.calendarBannerContent}>
+                            <View style={styles.googleCalendarIcon}>
+                <Text style={styles.calendarIconText}>
+                  {new Date().getDate()}
+                </Text>
+              </View>
+              <Text style={styles.calendarBannerText}>
+                Добавьте занятия BIRGE GO в свой Google-календарь
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={() => setShowGoogleCalendarBanner(false)}
+            >
+              <MaterialIcons name="close" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>
           </View>
+        )}
 
-          {selectedDayData.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="event-available" size={64} color={TEXT_MUTED} />
-              <ThemedText type="heading3" style={styles.emptyTitle}>
-                Свободный день
-              </ThemedText>
-              <ThemedText style={styles.emptyText}>
-                На этот день нет запланированных тренировок
-              </ThemedText>
-              <Button style={styles.addWorkoutButton}>
-                <ThemedText style={styles.addWorkoutText}>Найти тренировку</ThemedText>
-              </Button>
-            </View>
-          ) : (
-            <View style={styles.workoutsList}>
-              {selectedDayData.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.workoutCard}
-                  onPress={() => handleBookWorkout(item)}
+        {/* Date Indicator */}
+        <View style={styles.dateIndicator}>
+          <Text style={styles.dateText}>
+            Сегодня {new Date().toLocaleDateString('ru-RU', { 
+              day: 'numeric', 
+              month: 'long' 
+            })}
+          </Text>
+        </View>
+
+        {/* Booked Classes */}
+        {bookedClasses.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="event-busy" size={64} color={TEXT_MUTED} />
+            <Text style={styles.emptyTitle}>Нет забронированных занятий</Text>
+            <Text style={styles.emptySubtitle}>
+              Забронируйте занятие, чтобы оно появилось здесь
+            </Text>
+          </View>
+        ) : (
+          bookedClasses.map((bookedClass) => (
+            <View key={bookedClass.id} style={styles.classCard}>
+              {/* Class Title */}
+              <Text style={styles.classTitle}>{bookedClass.title}</Text>
+
+              {/* Date and Time */}
+              <View style={styles.timeInfo}>
+                <View style={styles.timeItem}>
+                  <MaterialIcons name="event" size={16} color={INFO} />
+                  <Text style={styles.timeText}>{bookedClass.date}</Text>
+                </View>
+                <View style={styles.timeItem}>
+                  <MaterialIcons name="access-time" size={16} color={INFO} />
+                  <Text style={styles.timeText}>{bookedClass.time}</Text>
+                </View>
+              </View>
+
+              {/* Confirmation Message */}
+              {bookedClass.canConfirmIn > 0 && (
+                <View style={styles.confirmationBox}>
+                  <Text style={styles.confirmationText}>
+                    Подтвердите занятие в течение 30 минут до его начала или в указанном интервале времени
+                  </Text>
+                </View>
+              )}
+
+              {/* Gym Info */}
+              <View style={styles.gymInfo}>
+                <View style={styles.gymHeader}>
+                  <View style={styles.ratingContainer}>
+                    <Text style={styles.ratingText}>{bookedClass.gymRating}</Text>
+                    <MaterialIcons name="star" size={12} color={SUCCESS} />
+                  </View>
+                  <Text style={styles.gymName}>{bookedClass.gymName}</Text>
+                </View>
+                <View style={styles.addressContainer}>
+                  <MaterialIcons name="location-on" size={16} color={TEXT_MUTED} />
+                  <Text style={styles.addressText}>{bookedClass.gymAddress}</Text>
+                </View>
+              </View>
+
+              {/* Mini Map */}
+              {bookedClass.location && bookedClass.location.lat && bookedClass.location.lng && (
+                <View style={styles.miniMapContainer}>
+                  <GymMap
+                    latitude={bookedClass.location.lat}
+                    longitude={bookedClass.location.lng}
+                    gymName={bookedClass.gymName}
+                    gymAddress={bookedClass.gymAddress}
+                    height={120}
+                    showMarker={true}
+                    zoomLevel={15}
+                  />
+                </View>
+              )}
+
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  style={[
+                    styles.confirmButton,
+                    bookedClass.canConfirmIn > 0 && styles.confirmButtonDisabled
+                  ]}
+                  onPress={() => handleCancelClass(bookedClass.id)}
+                  disabled={bookedClass.canConfirmIn > 0}
                 >
-                  <View style={styles.workoutHeader}>
-                    <View style={styles.workoutTime}>
-                      <ThemedText type="heading3" style={styles.timeText}>
-                        {item.time}
-                      </ThemedText>
-                      <ThemedText style={styles.durationText}>
-                        {item.duration} мин
-                      </ThemedText>
-                    </View>
-                    
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(item.status) + '20' }
-                    ]}>
-                      <ThemedText style={[
-                        styles.statusText,
-                        { color: getStatusColor(item.status) }
-                      ]}>
-                        {getStatusText(item.status)}
-                      </ThemedText>
-                    </View>
-                  </View>
-
-                  <View style={styles.workoutInfo}>
-                    <ThemedText type="defaultSemiBold" style={styles.workoutTitle}>
-                      {item.title}
-                    </ThemedText>
-                    <View style={styles.workoutDetails}>
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="person" size={16} color={TEXT_MUTED} />
-                        <ThemedText style={styles.detailText}>{item.trainer}</ThemedText>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="location-on" size={16} color={TEXT_MUTED} />
-                        <ThemedText style={styles.detailText}>{item.gym}</ThemedText>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="group" size={16} color={TEXT_MUTED} />
-                        <ThemedText style={styles.detailText}>
-                          {item.spots.available}/{item.spots.total} мест
-                        </ThemedText>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.categoryTag}>
-                      <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
-                    </View>
-                  </View>
-
-                  <View style={styles.workoutActions}>
-                    {item.status === 'available' && (
-                      <View style={styles.spotsIndicator}>
-                        <View style={[
-                          styles.spotsBar,
-                          { 
-                            backgroundColor: item.spots.available < 3 ? WARNING : SUCCESS,
-                            width: `${(item.spots.available / item.spots.total) * 100}%`
-                          }
-                        ]} />
-                      </View>
-                    )}
-                    <Ionicons 
-                      name="chevron-forward" 
-                      size={20} 
-                      color={TEXT_MUTED} 
-                    />
-                  </View>
+                  <Text style={styles.confirmButtonText}>
+                    Отменить занятие
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
 
-        {/* Быстрые действия */}
-        <View style={styles.quickActionsSection}>
-          <ThemedText type="heading2" style={styles.sectionTitle}>
-            Быстрые действия
-      </ThemedText>
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.quickActionCard}>
-              <MaterialIcons name="search" size={24} color={PRIMARY} />
-              <ThemedText style={styles.quickActionText}>Найти тренировку</ThemedText>
+                <View style={styles.secondaryActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => handleInvite(bookedClass.id)}
+                  >
+                    <MaterialIcons name="person-add" size={20} color={PRIMARY} />
+                    <Text style={styles.secondaryButtonText}>Позвать</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard}>
-              <MaterialIcons name="history" size={24} color={SECONDARY} />
-              <ThemedText style={styles.quickActionText}>История</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard}>
-              <MaterialIcons name="analytics" size={24} color={SUCCESS} />
-              <ThemedText style={styles.quickActionText}>Статистика</ThemedText>
+
+                  <View style={styles.buttonDivider} />
+
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => handleRoute(bookedClass.id)}
+                  >
+                    <MaterialIcons name="directions" size={20} color={INFO} />
+                    <Text style={styles.secondaryButtonText}>Маршрут</Text>
             </TouchableOpacity>
           </View>
         </View>
+            </View>
+          ))
+        )}
+          </>
+        )}
       </ScrollView>
-    </View>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: HEADER_DARK,
+    backgroundColor: BG,
   },
-  
-  // Header
   header: {
     backgroundColor: HEADER_DARK,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 16,
     paddingHorizontal: 16,
-    minHeight: 80,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   notificationButton: {
     padding: 4,
   },
-  
-  // ScrollView
-  scrollView: {
-    flex: 1,
+  pageTitleContainer: {
     backgroundColor: CARD_BG,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  scrollContent: {
-    paddingTop: 20,
-    paddingBottom: 100,
-  },
-  
-  // Common
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
     color: TEXT_DARK,
-    paddingHorizontal: 16,
-    marginBottom: 16,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  
-  // Stats
-  statsSection: {
-    marginBottom: 32,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  statCard: {
+  content: {
     flex: 1,
-    backgroundColor: BG,
-    borderRadius: 12,
-    padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 60,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: TEXT_DARK,
-    marginVertical: 8,
-  },
-  statLabel: {
-    fontSize: 12,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: TEXT_MUTED,
     textAlign: 'center',
   },
-  
-  // Calendar
-  calendarSection: {
-    marginBottom: 32,
+  calendarBanner: {
+    backgroundColor: '#FFF8F0',
+    margin: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFE4D1',
+    shadowColor: '#FF6246',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  daysScroll: {
-    paddingLeft: 16,
+  calendarBannerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  dayCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    padding: 12,
+  googleCalendarIcon: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#4285F4',
+    borderRadius: 6,
+    justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    minWidth: 60,
-    borderWidth: 1,
-    borderColor: BG,
   },
-  dayCardActive: {
-    backgroundColor: PRIMARY,
-    borderColor: PRIMARY,
-  },
-  dayLabel: {
+  calendarIconText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  dayLabelActive: {
-    color: CARD_BG,
-  },
-  dayDate: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: TEXT_DARK,
-    marginBottom: 4,
-  },
-  dayDateActive: {
-    color: CARD_BG,
-  },
-  dayIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: PRIMARY,
-  },
-  dayIndicatorActive: {
-    backgroundColor: CARD_BG,
-  },
-  
-  // Schedule
-  scheduleSection: {
-    marginBottom: 32,
-  },
-  
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    color: TEXT_DARK,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  addWorkoutButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  addWorkoutText: {
-    color: CARD_BG,
-    fontSize: 14,
     fontWeight: '600',
   },
-  
-  // Workouts list
-  workoutsList: {
-    paddingHorizontal: 16,
-    gap: 16,
+  calendarBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: TEXT_DARK,
+    lineHeight: 20,
   },
-  workoutCard: {
+  closeButton: {
+    padding: 4,
+  },
+  dateIndicator: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: SURFACE_LIGHT,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    textAlign: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    marginTop: 24,
+    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  classCard: {
     backgroundColor: CARD_BG,
+    margin: 16,
+    marginTop: 8,
     borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
   },
-  workoutHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  classTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_DARK,
     marginBottom: 12,
+    lineHeight: 24,
   },
-  workoutTime: {
-    alignItems: 'flex-start',
+  timeInfo: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 16,
+  },
+  timeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   timeText: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 14,
+    color: INFO,
+    fontWeight: '500',
+  },
+  confirmationBox: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  confirmationText: {
+    fontSize: 13,
+    color: INFO,
+    lineHeight: 18,
+  },
+  gymInfo: {
+    marginBottom: 16,
+  },
+  gymHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 8,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: SUCCESS,
+  },
+  gymName: {
+    fontSize: 16,
+    fontWeight: '700',
     color: TEXT_DARK,
+    flex: 1,
   },
-  durationText: {
-    fontSize: 12,
+  addressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  addressText: {
+    fontSize: 14,
     color: TEXT_MUTED,
+    flex: 1,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  miniMapContainer: {
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
   statusText: {
     fontSize: 12,
+    color: TEXT_MUTED,
+    fontWeight: '500',
+  },
+  actionButtons: {
+    gap: 12,
+  },
+  confirmButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#E0E0E0',
+  },
+  confirmButtonText: {
+    color: CARD_BG,
+    fontSize: 14,
     fontWeight: '600',
   },
-  workoutInfo: {
-    marginBottom: 16,
-  },
-  workoutTitle: {
-    fontSize: 16,
-    color: TEXT_DARK,
-    marginBottom: 8,
-  },
-  workoutDetails: {
-    marginBottom: 12,
-  },
-  detailRow: {
+  secondaryActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
-  detailText: {
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+  },
+  secondaryButtonText: {
     fontSize: 14,
-    color: TEXT_MUTED,
-    marginLeft: 8,
-  },
-  categoryTag: {
-    backgroundColor: BG,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  categoryText: {
-    fontSize: 12,
     color: TEXT_DARK,
     fontWeight: '500',
   },
-  workoutActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  spotsIndicator: {
-    flex: 1,
-    height: 4,
-    backgroundColor: BG,
-    borderRadius: 2,
-    marginRight: 12,
-    overflow: 'hidden',
-  },
-  spotsBar: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  
-  // Quick actions
-  quickActionsSection: {
-    paddingHorizontal: 16,
-    marginBottom: 32,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickActionCard: {
-    flex: 1,
-    backgroundColor: BG,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  quickActionText: {
-    fontSize: 12,
-    color: TEXT_DARK,
-    fontWeight: '600',
-    marginTop: 8,
-    textAlign: 'center',
+  buttonDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E0E0E0',
   },
 }); 

@@ -22,7 +22,7 @@ export function ThemedText({
   // Определяем цвет текста в зависимости от типа
   let textColor = theme;
   if (type === 'link') {
-    textColor = Colors[colorScheme].primary;
+    textColor = Colors[colorScheme].tint;
   } else if (type === 'muted') {
     textColor = Colors[colorScheme].mutedForeground;
   } else if (lightColor || darkColor) {
@@ -108,3 +108,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+

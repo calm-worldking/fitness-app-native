@@ -1,6 +1,8 @@
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { supabase } from '@/lib/supabase';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
+import { api, clearToken, getToken } from '@/lib/api';
+import { notificationService } from '@/lib/notifications';
+import { Slot } from 'expo-router';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -9,12 +11,14 @@ interface UserContextType {
   user: any;
   loading: boolean;
   signOut: () => Promise<void>;
+  signIn: (userData: any) => void;
 }
 
 const UserContext = createContext<UserContextType>({
   user: null,
-  loading: true,
+  loading: false,
   signOut: async () => {},
+  signIn: () => {},
 });
 
 export function useUser() {
@@ -25,70 +29,77 @@ export default function RootLayout() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const router = useRouter();
-  const segments = useSegments();
 
   useEffect(() => {
-    const getSession = async () => {
-      try {
-        // Проверяем, что Supabase доступен
-        if (!supabase) {
-          console.warn('Supabase not available, running in offline mode');
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+    const t = setTimeout(() => setShowSplash(false), 400);
+    return () => clearTimeout(t);
+  }, []);
 
-        const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn('Supabase auth error:', error.message);
-          setErrorMsg(error.message);
+  // Инициализируем сервис уведомлений
+  useEffect(() => {
+    const initNotifications = async () => {
+      try {
+        await notificationService.initialize();
+        console.log('📱 Notification service initialized');
+      } catch (error) {
+        console.log('⚠️ Failed to initialize notification service:', error);
+      }
+    };
+    
+    initNotifications();
+  }, []);
+
+  // Проверяем токен при загрузке приложения
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        setLoading(true);
+        const token = await getToken();
+        if (token) {
+          console.log('🔐 Token found, fetching user data...');
+          try {
+            const response = await api.getCurrentUser();
+            setUser(response.user);
+            console.log('✅ User data loaded:', response.user);
+          } catch {
+            console.log('🔐 Invalid token, clearing and continuing as guest');
+            // Если токен недействителен, просто очищаем его и продолжаем как гость
+            await clearToken();
+            setUser(null);
+          }
+        } else {
+          console.log('🔐 No token found, user is not authenticated');
         }
-        setUser(data?.session?.user ?? null);
-        setLoading(false);
-      } catch (e: any) {
-        console.warn('Supabase initialization error:', e.message);
-        setErrorMsg(e.message || 'Unknown error');
+      } catch (error) {
+        console.log('🔐 Auth check failed, continuing as guest:', error);
+        setUser(null);
+      } finally {
         setLoading(false);
       }
     };
-    getSession();
 
-    // Безопасно подписываемся на изменения аутентификации
-    try {
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-      });
-      return () => {
-        listener.subscription.unsubscribe();
-      };
-    } catch (e) {
-      console.warn('Failed to set up auth listener:', e);
-    }
+    checkAuth();
   }, []);
 
   const signOut = async () => {
     try {
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
+      await clearToken();
       setUser(null);
-    } catch (e) {
-      console.warn('Sign out error:', e);
+      console.log('👋 User signed out');
+    } catch (error) {
+      console.error('❌ Sign out failed:', error);
     }
   };
 
-  const handleSplashFinish = () => {
-    setShowSplash(false);
+  const signIn = (userData: any) => {
+    setUser(userData);
+    console.log('✅ User signed in:', userData);
   };
 
-  // Показываем загрузочный экран
   if (showSplash) {
-    return <LoadingScreen onFinish={handleSplashFinish} />;
+    return <LoadingScreen />;
   }
 
-  // Показываем индикатор загрузки для аутентификации
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
@@ -97,14 +108,11 @@ export default function RootLayout() {
     );
   }
 
-  // Даже если есть ошибка с Supabase, продолжаем работу приложения
-  if (errorMsg) {
-    console.warn('Supabase error, continuing in offline mode:', errorMsg);
-  }
-
   return (
-    <UserContext.Provider value={{ user, loading, signOut }}>
-      <Slot />
+    <UserContext.Provider value={{ user, loading, signOut, signIn }}>
+      <SubscriptionProvider userId={user?.id}>
+        <Slot />
+      </SubscriptionProvider>
     </UserContext.Provider>
   );
 }

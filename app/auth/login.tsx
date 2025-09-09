@@ -1,24 +1,25 @@
 import { Logo } from '@/components/Logo';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Alert,
-    Dimensions,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
+    Text,
     TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
+import { useUser } from '../_layout';
 
-const { width: screenWidth } = Dimensions.get('window');
+// const { width: screenWidth } = Dimensions.get('window');
 
 // Брендовые цвета
 const PRIMARY = '#FF6246';
@@ -28,14 +29,15 @@ const CARD_BG = '#FFFFFF';
 const TEXT_DARK = '#000000';
 const TEXT_MUTED = '#737373';
 const SUCCESS = '#4CAF50';
-const ERROR = '#FF3B30';
+// const ERROR = '#FF3B30';
 
-export default function LoginScreen() {
+function LoginScreenContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const { signIn } = useUser();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -45,18 +47,9 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      if (!supabase) {
-        Alert.alert('Ошибка', 'Сервис временно недоступен. Попробуйте позже.');
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        Alert.alert('Ошибка входа', error.message);
-      } else {
-        router.replace('/');
-      }
+      const userData = await api.login(email, password);
+      signIn(userData);
+      router.replace('/');
     } catch (error: any) {
       Alert.alert('Ошибка', error.message || 'Произошла ошибка при входе');
     } finally {
@@ -98,16 +91,16 @@ export default function LoginScreen() {
           <ThemedText type="heading1" style={styles.title}>
             Добро пожаловать!
           </ThemedText>
-          <ThemedText style={styles.subtitle}>
+          <Text style={styles.subtitle}>
             Войдите в аккаунт, чтобы продолжить тренировки
-          </ThemedText>
+          </Text>
         </View>
 
         {/* Форма входа */}
         <View style={styles.formSection}>
           {/* Email */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Email</ThemedText>
+            <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="email" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -125,7 +118,7 @@ export default function LoginScreen() {
 
           {/* Пароль */}
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Пароль</ThemedText>
+            <Text style={styles.inputLabel}>Пароль</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="lock" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
@@ -152,9 +145,9 @@ export default function LoginScreen() {
 
           {/* Забыли пароль */}
           <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
-            <ThemedText style={styles.forgotPasswordText}>
+            <Text style={styles.forgotPasswordText}>
               Забыли пароль?
-            </ThemedText>
+            </Text>
           </TouchableOpacity>
 
           {/* Кнопка входа */}
@@ -166,10 +159,10 @@ export default function LoginScreen() {
             {loading ? (
               <View style={styles.loadingContainer}>
                 <MaterialIcons name="hourglass-empty" size={20} color={CARD_BG} />
-                <ThemedText style={styles.loginButtonText}>Вход...</ThemedText>
+                <Text style={styles.loginButtonText}>Вход...</Text>
               </View>
             ) : (
-              <ThemedText style={styles.loginButtonText}>Войти</ThemedText>
+              <Text style={styles.loginButtonText}>Войти</Text>
             )}
           </Button>
         </View>
@@ -177,7 +170,7 @@ export default function LoginScreen() {
         {/* Разделитель */}
         <View style={styles.dividerSection}>
           <View style={styles.dividerLine} />
-          <ThemedText style={styles.dividerText}>или</ThemedText>
+          <Text style={styles.dividerText}>или</Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -188,7 +181,7 @@ export default function LoginScreen() {
             onPress={() => handleSocialLogin('Google')}
           >
             <MaterialIcons name="login" size={20} color={TEXT_DARK} />
-            <ThemedText style={styles.socialButtonText}>Войти через Google</ThemedText>
+            <Text style={styles.socialButtonText}>Войти через Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -196,43 +189,43 @@ export default function LoginScreen() {
             onPress={() => handleSocialLogin('Apple')}
           >
             <MaterialIcons name="smartphone" size={20} color={TEXT_DARK} />
-            <ThemedText style={styles.socialButtonText}>Войти через Apple</ThemedText>
+            <Text style={styles.socialButtonText}>Войти через Apple</Text>
           </TouchableOpacity>
         </View>
 
         {/* Регистрация */}
         <View style={styles.registerSection}>
-          <ThemedText style={styles.registerText}>
+          <Text style={styles.registerText}>
             Нет аккаунта?{' '}
-          </ThemedText>
+          </Text>
           <TouchableOpacity onPress={() => router.push('/auth/register')}>
-            <ThemedText style={styles.registerLink}>
+            <Text style={styles.registerLink}>
               Зарегистрироваться
-            </ThemedText>
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Дополнительная информация */}
         <View style={styles.infoSection}>
           <View style={styles.benefitItem}>
-            <MaterialIcons name="family-restroom" size={20} color={PRIMARY} />
-            <ThemedText style={styles.benefitText}>
+            <MaterialIcons name="groups" size={20} color={PRIMARY} />
+            <Text style={styles.benefitText}>
               Семейная подписка до 4 человек
-            </ThemedText>
+            </Text>
           </View>
           
           <View style={styles.benefitItem}>
             <MaterialIcons name="fitness-center" size={20} color={SECONDARY} />
-            <ThemedText style={styles.benefitText}>
+            <Text style={styles.benefitText}>
               Безлимитный доступ ко всем залам
-            </ThemedText>
+            </Text>
           </View>
           
           <View style={styles.benefitItem}>
             <MaterialIcons name="analytics" size={20} color={SUCCESS} />
-            <ThemedText style={styles.benefitText}>
+            <Text style={styles.benefitText}>
               Отслеживание прогресса всей семьи
-            </ThemedText>
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -434,3 +427,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 }); 
+
+export default function LoginScreen() {
+  return <LoginScreenContent />;
+}

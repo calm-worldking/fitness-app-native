@@ -1,0 +1,71 @@
+import React from 'react';
+import { View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+
+interface BirgeGoLogoProps {
+  width?: number;
+  height?: number;
+  color?: string;
+  variant?: 'primary' | 'white' | 'light';
+}
+
+export function BirgeGoLogo({ 
+  width = 200, 
+  height = 60, 
+  color = '#FF6246',
+  variant = 'primary'
+}: BirgeGoLogoProps) {
+  // Определяем цвета в зависимости от варианта
+  const getColors = () => {
+    switch (variant) {
+      case 'white':
+        return {
+          primary: '#FFFFFF',
+          secondary: '#FFE7D8'
+        };
+      case 'light':
+        return {
+          primary: '#FFE7D8',
+          secondary: '#FFFFFF'
+        };
+      default:
+        return {
+          primary: '#FF6246',
+          secondary: '#FF8843'
+        };
+    }
+  };
+
+  const colors = getColors();
+
+  return (
+    <View style={{ width, height }}>
+      <Svg width={width} height={height} viewBox="0 0 520 158" fill="none">
+        {/* Основные элементы логотипа */}
+        <Path d="M343.396 41.5552L318.269 43.7139L284.603 157.029L309.73 154.87L343.396 41.5552Z" fill={colors.primary}/>
+        <Path d="M318.278 43.7091L311.546 66.3701L412.055 57.7352L418.788 35.0742L318.278 43.7091Z" fill={colors.primary}/>
+        <Path d="M291.331 134.363L284.598 157.024L385.108 148.39L391.84 125.729L291.331 134.363Z" fill={colors.primary}/>
+        <Path d="M405.299 80.4039L380.172 82.5625L359.973 150.551L385.099 148.393L405.299 80.4039Z" fill={colors.primary}/>
+        <Path d="M355.073 84.7248L348.34 107.386L398.595 103.068L405.328 80.4073L355.073 84.7248Z" fill={colors.primary}/>
+        <Path d="M469.046 30.7544L443.92 32.9131L410.254 146.228L435.38 144.069L469.046 30.7544Z" fill={colors.primary}/>
+        <Path d="M443.898 32.9171L437.166 55.5781L512.546 49.1021L519.279 26.4411L443.898 32.9171Z" fill={colors.primary}/>
+        <Path d="M416.974 123.57L410.241 146.231L485.622 139.755L492.355 117.094L416.974 123.57Z" fill={colors.primary}/>
+        <Path d="M519.295 26.439L494.169 28.5977L460.503 141.912L485.63 139.754L519.295 26.439Z" fill={colors.primary}/>
+        
+        {/* Вторичные элементы */}
+        <Path d="M130.739 15.6685L105.612 17.8271L71.9465 131.142L97.0729 128.983L130.739 15.6685Z" fill={colors.secondary}/>
+        <Path d="M105.596 17.8302L98.8633 40.4912L199.373 31.8563L206.105 9.19533L105.596 17.8302Z" fill={colors.secondary}/>
+        <Path d="M78.6794 108.482L71.9468 131.143L172.456 122.508L179.189 99.8467L78.6794 108.482Z" fill={colors.secondary}/>
+        <Path d="M192.647 54.5191L167.521 56.6777L147.321 124.667L172.448 122.508L192.647 54.5191Z" fill={colors.secondary}/>
+        <Path d="M142.385 58.839L135.652 81.5L185.907 77.1826L192.64 54.5216L142.385 58.839Z" fill={colors.secondary}/>
+        <Path d="M80.4824 19.982L55.356 22.1406L21.6901 135.455L46.8165 133.297L80.4824 19.982Z" fill={colors.secondary}/>
+        <Path fillRule="evenodd" clipRule="evenodd" d="M80.4727 19.9814C71.1677 51.2744 35.5075 79.0457 0.81543 82.0474L7.5387 59.3813C28.3539 57.585 49.7608 40.9222 55.3277 22.1322L80.4458 19.9814H80.4727Z" fill={colors.secondary}/>
+        <Path d="M256.376 4.87748L231.25 7.03613L197.584 120.351L222.711 118.192L256.376 4.87748Z" fill={colors.secondary}/>
+        <Path d="M231.252 7.03726L224.519 29.6982L299.9 23.2222L306.632 0.561211L231.252 7.03726Z" fill={colors.secondary}/>
+        <Path d="M204.327 97.6837L197.595 120.345L272.976 113.869L279.708 91.2077L204.327 97.6837Z" fill={colors.secondary}/>
+        <Path d="M217.766 52.3644L211.034 75.0254L261.289 70.7079L268.021 48.047L217.766 52.3644Z" fill={colors.secondary}/>
+      </Svg>
+    </View>
+  );
+}
+

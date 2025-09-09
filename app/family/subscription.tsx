@@ -222,7 +222,7 @@ export default function FamilySubscriptionScreen() {
         </TouchableOpacity>
         
         <View style={styles.logoContainer}>
-          <ThemedText style={styles.superText}>SUPER</ThemedText>
+                          <ThemedText style={styles.superText}>SUPER</ThemedText>
           <Logo width={80} height={24} />
         </View>
         
@@ -260,7 +260,7 @@ export default function FamilySubscriptionScreen() {
             </View>
             
             <View style={styles.statCard}>
-              <MaterialIcons name="local-fire-department" size={24} color={WARNING} />
+              <MaterialIcons name="whatshot" size={24} color={WARNING} />
               <ThemedText type="heading3" style={styles.statValue}>
                 {averageStreak}
               </ThemedText>
@@ -306,7 +306,7 @@ export default function FamilySubscriptionScreen() {
                     
                     <View style={styles.memberStats}>
                       <View style={styles.memberStat}>
-                        <MaterialIcons name="local-fire-department" size={16} color={WARNING} />
+                        <MaterialIcons name="whatshot" size={16} color={WARNING} />
                         <ThemedText style={styles.memberStatText}>
                           {member.streak} дней
                         </ThemedText>
@@ -422,7 +422,7 @@ export default function FamilySubscriptionScreen() {
           <View style={styles.subscriptionCard}>
             <View style={styles.subscriptionHeader}>
               <View style={styles.subscriptionIcon}>
-                <MaterialIcons name="family-restroom" size={32} color={SECONDARY} />
+                <MaterialIcons name="groups" size={32} color={SECONDARY} />
               </View>
               <View style={styles.subscriptionInfo}>
                 <ThemedText type="heading3" style={styles.subscriptionTitle}>

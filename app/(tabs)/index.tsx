@@ -1,10 +1,13 @@
 import { Logo } from '@/components/Logo';
+import { SimpleLoadingScreen } from '@/components/SimpleLoadingScreen';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
+import { AppHeader } from '@/components/AppHeader';
+import { api, fetchGyms } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Dimensions,
     RefreshControl,
@@ -28,63 +31,42 @@ const TEXT_MUTED = '#737373';
 const SUCCESS = '#4CAF50';
 const HEADER_DARK = '#0D1F2C';
 
-// Моковые данные
-const gyms = [
-  {
-    id: '1',
-    name: 'FitLife Центральный',
-    address: 'ул. Ленина, 42',
-    image: require('../../assets/images/placeholder_gym1.jpg'),
-    rating: 9.8,
-    distance: '1.2 км',
-    price: '15 000 ₸',
-    category: 'Премиум',
-    features: ['Бассейн', 'Сауна'],
-  },
-  {
-    id: '2', 
-    name: 'FitLife Восточный',
-    address: 'ул. Гагарина, 15',
-    image: require('../../assets/images/placeholder_gym2.jpg'),
-    rating: 9.5,
-    distance: '3.5 км', 
-    price: '12 000 ₸',
-    category: 'Стандарт',
-    features: ['Тренажеры', 'Групповые'],
-  },
-  {
-    id: '3',
-    name: 'FitLife Южный', 
-    address: 'ул. Пушкина, 78',
-    image: require('../../assets/images/placeholder_gym3.jpg'),
-    rating: 9.7,
-    distance: '5.1 км',
-    price: '18 000 ₸',
-    category: 'Премиум',
-    features: ['Йога', 'Кроссфит'],
-  }
-];
+type GymCard = { 
+  id: string; 
+  name: string; 
+  address?: string | null;
+  _count?: { classes: number };
+}
 
 const workoutTypes = [
-  { icon: 'fitness-center', label: 'Силовые', count: 57, color: PRIMARY },
-  { icon: 'self-improvement', label: 'Йога', count: 68, color: SECONDARY },
-  { icon: 'pool', label: 'Плавание', count: 15, color: '#3EC6FF' },
-  { icon: 'groups', label: 'Групповые', count: 42, color: '#A259FF' },
+  { icon: 'fitness-center', label: 'Силовые', count: 57, color: PRIMARY, tag: 'силовые' },
+  { icon: 'self-improvement', label: 'Йога', count: 68, color: SECONDARY, tag: 'йога' },
+  { icon: 'pool', label: 'Плавание', count: 15, color: '#3EC6FF', tag: 'плавание' },
+  { icon: 'groups', label: 'Групповые', count: 42, color: '#A259FF', tag: 'групповые' },
 ];
 
 const quickActions = [
   { icon: 'calendar-today', label: 'Расписание', route: '/schedule', color: PRIMARY },
   { icon: 'card-membership', label: 'Абонементы', route: '/subscription', color: SECONDARY },
-  { icon: 'family-restroom', label: 'Семейная подписка', route: '/family/subscription', color: '#A259FF' },
+  { icon: 'groups', label: 'Семейная подписка', route: '/family/subscription', color: '#A259FF' },
   { icon: 'analytics', label: 'Статистика', route: '/profile', color: SUCCESS },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [gyms, setGyms] = useState<GymCard[]>([]);
+  const [loadingGyms, setLoadingGyms] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState({
+    thisMonth: 0,
+    weekStreak: 0,
+  });
   const insets = useSafeAreaInsets();
+  
+  // Кэш для залов
+  const gymsCache = useMemo(() => new Map<string, any[]>(), []);
   
   // Восстанавливаем позицию скролла при возврате
   useEffect(() => {
@@ -95,16 +77,66 @@ export default function HomeScreen() {
     }, 100);
     
     return () => clearTimeout(timer);
+  }, [scrollPosition]);
+
+  // Загружаем статистику при монтировании
+  useEffect(() => {
+    loadUserStats();
   }, []);
   
+  const loadUserStats = async () => {
+    try {
+      console.log('📊 Loading user stats for home screen...');
+      const stats = await api.getUserStats();
+      setUserStats({
+        thisMonth: stats.thisMonth,
+        weekStreak: stats.weekStreak,
+      });
+    } catch (error) {
+      console.log('❌ Failed to load user stats:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise(res => setTimeout(res, 1000));
-    setRefreshing(false);
+    try {
+      setLoadingGyms(true);
+      console.log('🔄 Refreshing gyms data...');
+      const res = await fetchGyms({ take: 10 });
+      const gymsData = res.items.map(g => ({ 
+        id: g.id, 
+        name: g.name, 
+        address: g.address,
+        _count: g._count
+      }));
+      
+      // Обновляем кэш
+      gymsCache.set('gyms_list', gymsData);
+      setGyms(gymsData);
+      
+      // Загружаем статистику
+      await loadUserStats();
+    } catch (e) {
+      console.warn('Failed to refresh gyms', e);
+    } finally {
+      setLoadingGyms(false);
+      setRefreshing(false);
+    }
   };
 
   const handleGymPress = (gymId: string) => {
     router.push(`/gym/${gymId}` as any);
+  };
+
+  const handleWorkoutTypePress = (workoutType: any) => {
+    // Переходим на страницу залов с фильтром по типу тренировки
+    router.push({
+      pathname: '/(tabs)/explore' as any,
+      params: {
+        filter: workoutType.label.toLowerCase(),
+        activityTags: workoutType.tag || workoutType.label.toLowerCase()
+      }
+    });
   };
 
   const handleQuickAction = (route: string) => {
@@ -115,17 +147,71 @@ export default function HomeScreen() {
     setScrollPosition(event.nativeEvent.contentOffset.y);
   };
 
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setLoadingGyms(true);
+        
+        // Проверяем кэш
+        const cacheKey = 'gyms_list';
+        if (gymsCache.has(cacheKey)) {
+          console.log('🚀 Loading gyms from cache');
+          setGyms(gymsCache.get(cacheKey)!);
+          setLoadingGyms(false);
+          return;
+        }
+        
+        console.log('📡 Fetching gyms from API...');
+        const res = await fetchGyms({ take: 10 });
+        
+        if (!res || !res.items) {
+          console.warn('📱 No gyms data received, using fallback');
+          setGyms([]);
+          return;
+        }
+        
+        const gymsData = res.items.map((g: any) => ({ 
+          id: g.id, 
+          name: g.name, 
+          address: g.address,
+          description: g.description,
+          photos: g.photos || [],
+          activityTags: g.activityTags || [],
+          services: g.services || [],
+          _count: g._count || { classes: 0, classTypes: 0 }
+        }));
+        
+        if (mounted) {
+          // Сохраняем в кэш
+          gymsCache.set(cacheKey, gymsData);
+          setGyms(gymsData);
+        }
+      } catch (e) {
+        console.warn('Failed to load gyms', e);
+        if (mounted) {
+          setGyms([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingGyms(false);
+        }
+      }
+    };
+    load();
+    const interval = setInterval(load, 60_000); // polling раз в минуту
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    }
+  }, [gymsCache]);
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={HEADER_DARK} barStyle="light-content" translucent={false} />
       
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Logo width={120} height={36} />
-        <TouchableOpacity style={styles.notificationButton}>
-          <MaterialIcons name="notifications-none" size={28} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <AppHeader />
 
       <ScrollView
         ref={scrollViewRef}
@@ -158,7 +244,7 @@ export default function HomeScreen() {
               </Button>
             </View>
             <View style={styles.promoImage}>
-              <MaterialIcons name="local-fire-department" size={60} color={PRIMARY} />
+              <MaterialIcons name="whatshot" size={60} color={PRIMARY} />
             </View>
           </View>
         </View>
@@ -195,54 +281,56 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.gymsList}
-          >
-            {gyms.map((gym) => (
-              <TouchableOpacity 
-                key={gym.id} 
-                style={styles.gymCard}
-                onPress={() => handleGymPress(gym.id)}
-              >
-                <Image source={gym.image} style={styles.gymImage} />
-                <View style={styles.gymInfo}>
-                  <View style={styles.gymHeader}>
-                    <ThemedText type="defaultSemiBold" style={styles.gymName}>
-                      {gym.name}
-                    </ThemedText>
-                    <View style={styles.ratingBadge}>
-                      <Ionicons name="star" size={12} color={CARD_BG} />
-                      <ThemedText style={styles.ratingText}>{gym.rating}</ThemedText>
+          {loadingGyms ? (
+            <View style={styles.loadingContainer}>
+              <SimpleLoadingScreen message="Загружаем залы..." />
+            </View>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.gymsList}
+            >
+              {gyms.map((gym) => (
+                <TouchableOpacity 
+                  key={gym.id} 
+                  style={styles.gymCard}
+                  onPress={() => handleGymPress(gym.id)}
+                >
+                  <Image source={require('../../assets/images/placeholder_gym1.jpg')} style={styles.gymImage} />
+                  <View style={styles.gymInfo}>
+                    <View style={styles.gymHeader}>
+                      <ThemedText type="defaultSemiBold" style={styles.gymName}>
+                        {gym.name}
+                      </ThemedText>
+                      <View style={styles.ratingBadge}>
+                        <Ionicons name="star" size={12} color={CARD_BG} />
+                        <ThemedText style={styles.ratingText}>9.6</ThemedText>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.gymDetails}>
+                      <View style={styles.addressRow}>
+                        <Ionicons name="location-outline" size={14} color={TEXT_MUTED} />
+                        <ThemedText style={styles.addressText}>{gym.address || '—'}</ThemedText>
+                      </View>
+                      <ThemedText style={styles.distanceText}>
+                        {gym._count?.classes || 0} занятий
+                      </ThemedText>
+                    </View>
+                    
+                    <View style={styles.gymFooter}>
+                      <View style={styles.featuresRow} />
+                      <View style={styles.includedBadge}>
+                        <MaterialIcons name="check-circle" size={16} color={SUCCESS} />
+                        <ThemedText style={styles.includedText}>Включено</ThemedText>
+                      </View>
                     </View>
                   </View>
-                  
-                  <View style={styles.gymDetails}>
-                    <View style={styles.addressRow}>
-                      <Ionicons name="location-outline" size={14} color={TEXT_MUTED} />
-                      <ThemedText style={styles.addressText}>{gym.address}</ThemedText>
-                    </View>
-                    <ThemedText style={styles.distanceText}>{gym.distance}</ThemedText>
-                  </View>
-                  
-                  <View style={styles.gymFooter}>
-                    <View style={styles.featuresRow}>
-                      {gym.features.slice(0, 2).map((feature, index) => (
-                        <View key={index} style={styles.featureTag}>
-                          <ThemedText style={styles.featureText}>{feature}</ThemedText>
-                        </View>
-                      ))}
-                    </View>
-                    <View style={styles.includedBadge}>
-                      <MaterialIcons name="check-circle" size={16} color={SUCCESS} />
-                      <ThemedText style={styles.includedText}>Включено</ThemedText>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* Популярные виды тренировок */}
@@ -252,7 +340,11 @@ export default function HomeScreen() {
           </ThemedText>
           <View style={styles.workoutTypesGrid}>
             {workoutTypes.map((type, index) => (
-              <TouchableOpacity key={index} style={styles.workoutTypeCard}>
+              <TouchableOpacity 
+                key={index} 
+                style={styles.workoutTypeCard}
+                onPress={() => handleWorkoutTypePress(type)}
+              >
                 <View style={[styles.workoutTypeIcon, { backgroundColor: type.color + '20' }]}>
                   <MaterialIcons name={type.icon as any} size={32} color={type.color} />
                 </View>
@@ -277,16 +369,16 @@ export default function HomeScreen() {
               <View style={styles.statIcon}>
                 <MaterialIcons name="trending-up" size={24} color={SUCCESS} />
               </View>
-              <ThemedText type="heading3" style={styles.statValue}>12</ThemedText>
+              <ThemedText type="heading3" style={styles.statValue}>{userStats.thisMonth}</ThemedText>
               <ThemedText style={styles.statLabel}>Тренировок в месяц</ThemedText>
             </View>
             
             <View style={styles.statCard}>
               <View style={styles.statIcon}>
-                <MaterialIcons name="local-fire-department" size={24} color={PRIMARY} />
+                <MaterialIcons name="whatshot" size={24} color={PRIMARY} />
               </View>
-              <ThemedText type="heading3" style={styles.statValue}>7</ThemedText>
-              <ThemedText style={styles.statLabel}>Дней подряд</ThemedText>
+              <ThemedText type="heading3" style={styles.statValue}>{userStats.weekStreak}</ThemedText>
+              <ThemedText style={styles.statLabel}>Недель подряд</ThemedText>
             </View>
           </View>
         </View>
@@ -634,6 +726,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT_MUTED,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

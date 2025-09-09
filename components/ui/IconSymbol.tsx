@@ -55,3 +55,4 @@ export function IconSymbol({
   const iconName = MAPPING[name] || name;
   return <MaterialIcons color={color} size={size} name={iconName} style={style} />;
 }
+

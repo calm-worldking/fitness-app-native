@@ -75,7 +75,7 @@ export default function FamilyPage() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color="#000" />
         </TouchableOpacity>
-        <ThemedText type="title">Семейный аккаунт</ThemedText>
+        <Text type="title">Семейный аккаунт</Text>
       </ThemedView>
 
       <TouchableOpacity 
@@ -84,31 +84,31 @@ export default function FamilyPage() {
       >
         <ThemedView style={styles.infoCardContent}>
           <ThemedView style={styles.infoCardHeader}>
-            <ThemedText type="subtitle">Информация о подписке</ThemedText>
+            <Text type="subtitle">Информация о подписке</Text>
             <IconSymbol name="chevron.right" size={16} color="#888888" />
           </ThemedView>
           <ThemedView style={styles.infoRow}>
-            <ThemedText type="defaultSemiBold">Тип:</ThemedText>
-            <ThemedText>Семейный</ThemedText>
+            <Text type="defaultSemiBold">Тип:</Text>
+            <Text>Семейный</Text>
           </ThemedView>
           <ThemedView style={styles.infoRow}>
-            <ThemedText type="defaultSemiBold">Стоимость:</ThemedText>
-            <ThemedText>4 900 ₽/месяц</ThemedText>
+            <Text type="defaultSemiBold">Стоимость:</Text>
+            <Text>4 900 ₽/месяц</Text>
           </ThemedView>
           <ThemedView style={styles.infoRow}>
-            <ThemedText type="defaultSemiBold">Участники:</ThemedText>
-            <ThemedText>{familyMembers.length}/4</ThemedText>
+            <Text type="defaultSemiBold">Участники:</Text>
+            <Text>{familyMembers.length}/4</Text>
           </ThemedView>
           <ThemedView style={styles.infoRow}>
-            <ThemedText type="defaultSemiBold">Действует до:</ThemedText>
-            <ThemedText>31.08.2023</ThemedText>
+            <Text type="defaultSemiBold">Действует до:</Text>
+            <Text>31.08.2023</Text>
           </ThemedView>
         </ThemedView>
       </TouchableOpacity>
 
-      <ThemedText type="subtitle" style={styles.membersTitle}>
+      <Text type="subtitle" style={styles.membersTitle}>
         Участники ({familyMembers.length}/4)
-      </ThemedText>
+      </Text>
 
       <ThemedView style={styles.membersList}>
         {familyMembers.map(member => (
@@ -116,8 +116,8 @@ export default function FamilyPage() {
             <ThemedView style={styles.memberInfo}>
               <Image source={member.photo} style={styles.memberPhoto} />
               <ThemedView style={styles.memberDetails}>
-                <ThemedText type="defaultSemiBold">{member.name}</ThemedText>
-                <ThemedText style={styles.memberEmail}>{member.email}</ThemedText>
+                <Text type="defaultSemiBold">{member.name}</Text>
+                <Text style={styles.memberEmail}>{member.email}</Text>
               </ThemedView>
             </ThemedView>
             <ThemedView style={styles.memberActions}>
@@ -125,9 +125,9 @@ export default function FamilyPage() {
                 style={[styles.statusButton, member.isActive ? styles.activeButton : styles.inactiveButton]} 
                 onPress={() => toggleMemberStatus(member.id)}
               >
-                <ThemedText style={member.isActive ? styles.activeText : styles.inactiveText}>
+                <Text style={member.isActive ? styles.activeText : styles.inactiveText}>
                   {member.isActive ? 'Активен' : 'Не активен'}
-                </ThemedText>
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.removeButton}
@@ -143,7 +143,7 @@ export default function FamilyPage() {
       {familyMembers.length < 4 && (
         <TouchableOpacity style={styles.addButton}>
           <IconSymbol name="plus" size={20} color="white" style={styles.addIcon} />
-          <ThemedText style={styles.addButtonText}>Добавить участника</ThemedText>
+          <Text style={styles.addButtonText}>Добавить участника</Text>
         </TouchableOpacity>
       )}
     </ThemedView>
