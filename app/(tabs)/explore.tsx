@@ -100,11 +100,17 @@ export default function ExploreScreen() {
           setServices(servicesRes.services);
         }
       } catch (error) {
-        console.log('Failed to load filters:', error);
+        console.error('Failed to load filters:', error);
+        // Не показываем ошибку пользователю, так как фильтры не критичны
       }
     };
 
     loadFilters();
+  }, []);
+
+  // Загружаем залы при открытии страницы
+  useEffect(() => {
+    searchGyms();
   }, []);
 
   // Поиск залов
@@ -154,8 +160,9 @@ export default function ExploreScreen() {
         setGyms([]);
       }
     } catch (error) {
-      console.log('Search failed:', error);
+      console.error('Search failed:', error);
       setGyms([]);
+      Alert.alert('Ошибка', 'Не удалось загрузить залы. Проверьте подключение к интернету.');
     } finally {
       setLoading(false);
     }
@@ -199,7 +206,8 @@ export default function ExploreScreen() {
         setGyms(transformedPopularGyms);
       }
     } catch (error) {
-      console.log('Failed to load popular gyms:', error);
+      console.error('Failed to load popular gyms:', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить популярные залы.');
     }
   };
 
@@ -535,12 +543,14 @@ export default function ExploreScreen() {
                     <MaterialIcons name="fitness-center" size={32} color="#fff" />
                   </View>
                   <View style={styles.gymImageOverlay}>
-                    <View style={styles.gymRating}>
-                      <Ionicons name="star" size={12} color="#FFD700" />
-                      <ThemedText style={styles.gymRatingText}>
-                        {gym.rating || 4.5}
-                      </ThemedText>
-                    </View>
+                    {gym.rating && gym.rating > 0 ? (
+                      <View style={styles.gymRating}>
+                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <ThemedText style={styles.gymRatingText}>
+                          {gym.rating}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
 
@@ -562,6 +572,40 @@ export default function ExploreScreen() {
                         <MaterialIcons name="navigation" size={14} color={SECONDARY} />
                       )}
                     </TouchableOpacity>
+                  )}
+
+                  {/* Статистика зала */}
+                  <View style={styles.gymStats}>
+                    <View style={styles.stat}>
+                      <MaterialIcons name="fitness-center" size={14} color={TEXT_MUTED} />
+                      <ThemedText style={styles.statText}>
+                        {gym._count?.classes || 0} занятий
+                      </ThemedText>
+                    </View>
+                    <View style={styles.stat}>
+                      <MaterialIcons name="category" size={14} color={TEXT_MUTED} />
+                      <ThemedText style={styles.statText}>
+                        {gym._count?.classTypes || 0} типов
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  {/* Теги занятий */}
+                  {gym.activityTags && gym.activityTags.length > 0 && (
+                    <View style={styles.gymTags}>
+                      {gym.activityTags.slice(0, 3).map((tag, index) => (
+                        <View key={index} style={styles.gymTag}>
+                          <ThemedText style={styles.gymTagText}>
+                            {tag}
+                          </ThemedText>
+                        </View>
+                      ))}
+                      {gym.activityTags.length > 3 && (
+                        <ThemedText style={styles.moreTags}>
+                          +{gym.activityTags.length - 3} еще
+                        </ThemedText>
+                      )}
+                    </View>
                   )}
 
                 </View>
@@ -1067,23 +1111,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 12,
+    marginTop: 8,
   },
   gymTag: {
     backgroundColor: ACCENT_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: BG,
   },
   gymTagText: {
-    fontSize: 12,
+    fontSize: 11,
     color: PRIMARY,
     fontWeight: '500',
   },
   moreTags: {
-    fontSize: 12,
+    fontSize: 11,
     color: TEXT_MUTED,
     alignSelf: 'center',
     fontWeight: '500',
@@ -1091,6 +1135,7 @@ const styles = StyleSheet.create({
   gymStats: {
     flexDirection: 'row',
     gap: 16,
+    marginTop: 8,
   },
   stat: {
     flexDirection: 'row',

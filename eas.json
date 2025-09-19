@@ -11,14 +11,24 @@
       },
       "ios": {
         "buildConfiguration": "Debug"
+      },
+      "env": {
+        "EXPO_PUBLIC_PARTNER_API_BASE": "http://192.168.10.205:3002"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_PARTNER_API_BASE": "https://partner.xnova.kz"
       }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_PARTNER_API_BASE": "https://partner.xnova.kz"
+      }
+    }
   }
 } 

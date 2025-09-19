@@ -4,12 +4,13 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { api, fetchClasses, fetchGym } from '@/lib/api';
 import { notificationService } from '@/lib/notifications';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Dimensions, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState, useMemo } from 'react';
+import { Alert, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 
-const { width: screenWidth } = Dimensions.get('window');
+// const { width: screenWidth } = Dimensions.get('window');
 
 // Брендовые цвета BIRGE GO
 const PRIMARY = '#FF6246';
@@ -19,7 +20,7 @@ const CARD_BG = '#FFFFFF';
 const TEXT_DARK = '#000000';
 const TEXT_MUTED = '#737373';
 const SUCCESS = '#4CAF50';
-const WARNING = '#FF9800';
+// const WARNING = '#FF9800';
 const ERROR = '#F44336';
 const INFO = '#2196F3';
 const HEADER_DARK = '#0D1F2C';
@@ -27,16 +28,9 @@ const SURFACE_LIGHT = '#F8F9FA';
 const BORDER_LIGHT = '#E9ECEF';
 const ACCENT_BG = '#FFF5F2';
 
-// Дни недели
-const DAYS_OF_WEEK = [
-  { name: 'Пн', fullName: 'Понедельник', date: null },
-  { name: 'Вт', fullName: 'Вторник', date: null },
-  { name: 'Ср', fullName: 'Среда', date: null },
-  { name: 'Чт', fullName: 'Четверг', date: null },
-  { name: 'Пт', fullName: 'Пятница', date: null },
-  { name: 'Сб', fullName: 'Суббота', date: null },
-  { name: 'Вс', fullName: 'Воскресенье', date: null },
-];
+// Дни недели (названия для локализации)
+const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const DAY_FULL_NAMES = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
 // Тип для занятия с дополнительными полями
 interface ClassWithParticipants {
@@ -57,11 +51,12 @@ interface ClassWithParticipants {
 export default function BookingPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { activeSubscription } = useSubscription();
   const [gym, setGym] = useState<any>(null);
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState(0); // Начинаем с сегодняшнего дня
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
     const loadData = async () => {
@@ -81,6 +76,19 @@ export default function BookingPage() {
         if (classesData && classesData.items && classesData.items.length > 0) {
           console.log('📅 Classes data from server:', classesData.items);
           console.log('📅 First class structure:', classesData.items[0]);
+          
+          // Логируем все даты занятий для отладки
+          classesData.items.forEach((cls: any, index: number) => {
+            const classDate = new Date(cls.startsAt);
+            console.log(`📅 Class ${index + 1}:`, {
+              title: cls.title,
+              startsAt: cls.startsAt,
+              localDate: classDate.toLocaleDateString('ru-RU'),
+              localTime: classDate.toLocaleTimeString('ru-RU'),
+              dayOfWeek: classDate.getDay(),
+              dayName: DAY_NAMES[classDate.getDay() === 0 ? 6 : classDate.getDay() - 1]
+            });
+          });
           
           // Преобразуем данные API в формат с участниками
           const classesWithParticipants: ClassWithParticipants[] = classesData.items.map((cls: any) => ({
@@ -159,29 +167,69 @@ export default function BookingPage() {
   }, [classes.length]);
 
   // Получаем дату для выбранного дня (текущий день + следующие 6 дней)
-  const getDateForDay = (dayIndex: number) => {
-    const today = new Date();
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + dayIndex);
-    return targetDate;
-  };
+  const getDateForDay = useMemo(() => {
+    return (dayIndex: number) => {
+      const today = new Date();
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + dayIndex);
+      return targetDate;
+    };
+  }, []);
 
-  // Фильтруем занятия по выбранной дате
-  const getSelectedDate = () => {
+  // Получаем правильное название дня недели для даты
+  const getDayNameForDate = useMemo(() => {
+    return (date: Date) => {
+      // В JavaScript getDay() возвращает 0 для воскресенья, 1 для понедельника и т.д.
+      // Нам нужно преобразовать это в наш формат: 0 = Пн, 1 = Вт, ..., 6 = Вс
+      const dayOfWeek = date.getDay();
+      const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Воскресенье (0) становится 6, Понедельник (1) становится 0
+      return DAY_NAMES[adjustedDay];
+    };
+  }, []);
+
+  // Получаем полное название дня недели для даты
+  const getFullDayNameForDate = useMemo(() => {
+    return (date: Date) => {
+      const dayOfWeek = date.getDay();
+      const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      return DAY_FULL_NAMES[adjustedDay];
+    };
+  }, []);
+
+  // Вычисляем выбранную дату с помощью useMemo для стабильности
+  const selectedDateObj = useMemo(() => {
     const today = new Date();
     const selectedDate = new Date(today);
     selectedDate.setDate(today.getDate() + selectedDay);
+    const dayName = getDayNameForDate(selectedDate);
+    const fullDayName = getFullDayNameForDate(selectedDate);
+    console.log('📅 Selected day index:', selectedDay, 'Selected date:', selectedDate.toLocaleDateString('ru-RU'), 'Day name:', dayName, 'Full day name:', fullDayName);
     return selectedDate;
-  };
+  }, [selectedDay, getDayNameForDate, getFullDayNameForDate]);
 
-  const selectedDateObj = getSelectedDate();
-  const selectedDateString = selectedDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+  // Создаем строку даты в локальном времени для сравнения
+  const selectedDateString = selectedDateObj.getFullYear() + '-' + 
+    String(selectedDateObj.getMonth() + 1).padStart(2, '0') + '-' + 
+    String(selectedDateObj.getDate()).padStart(2, '0');
 
   // Фильтруем занятия по выбранной дате
   const filteredClasses = classes.filter((cls: any) => {
     const classDate = new Date(cls.startsAt);
-    const classDateString = classDate.toISOString().split('T')[0];
-    return classDateString === selectedDateString;
+    // Используем локальное время для сравнения дат
+    const classDateString = classDate.getFullYear() + '-' + 
+      String(classDate.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(classDate.getDate()).padStart(2, '0');
+    
+    const matches = classDateString === selectedDateString;
+    console.log('📅 Date comparison:', {
+      classTitle: cls.title,
+      classDate: classDateString,
+      classDateFull: classDate.toLocaleDateString('ru-RU'),
+      selectedDate: selectedDateString,
+      selectedDateFull: selectedDateObj.toLocaleDateString('ru-RU'),
+      matches: matches
+    });
+    return matches;
   });
 
   // Группируем занятия по типу
@@ -267,6 +315,26 @@ export default function BookingPage() {
   };
 
   const handleBookClass = async (classId: string) => {
+    // Проверяем, заморожена ли подписка
+    if ((activeSubscription as any)?.isFrozen) {
+      Alert.alert(
+        'Абонемент заморожен',
+        'Во время заморозки вы не можете записываться на занятия. Дождитесь окончания заморозки или обратитесь в поддержку.',
+        [{ text: 'Понятно', style: 'default' }]
+      );
+      return;
+    }
+
+    // Проверяем, есть ли активная подписка
+    if (!activeSubscription) {
+      Alert.alert(
+        'Нет активной подписки',
+        'Для записи на занятия необходима активная подписка. Оформите абонемент во вкладке "Абонемент".',
+        [{ text: 'Понятно', style: 'default' }]
+      );
+      return;
+    }
+
     const selectedClass = classes.find(cls => cls.id === classId);
     if (!selectedClass) return;
 
@@ -309,8 +377,17 @@ export default function BookingPage() {
               const bookingResult = await api.createBooking(classId);
 
               // Форматируем данные для страницы успеха
+              // Правильно обрабатываем время - startsAt приходит в UTC, нужно учесть локальную зону
               const startDate = new Date(selectedClass.startsAt);
               const endDate = new Date(selectedClass.endsAt);
+              
+              console.log('📅 Booking notification timing:', {
+                startsAt: selectedClass.startsAt,
+                startDate: startDate.toISOString(),
+                localStartDate: startDate.toLocaleString('ru-RU'),
+                now: new Date().toLocaleString('ru-RU'),
+                timeUntilStart: Math.floor((startDate.getTime() - new Date().getTime()) / (1000 * 60)) + ' минут'
+              });
               
               const today = new Date();
               const tomorrow = new Date(today);
@@ -527,8 +604,9 @@ export default function BookingPage() {
       {/* Days Selector */}
       <View style={styles.daysContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysScrollContent}>
-          {DAYS_OF_WEEK.map((day, index) => {
+          {Array.from({ length: 7 }, (_, index) => {
             const date = getDateForDay(index);
+            const dayName = getDayNameForDate(date);
             const isSelected = selectedDay === index;
             const isToday = index === 0;
             
@@ -539,7 +617,7 @@ export default function BookingPage() {
                 onPress={() => setSelectedDay(index)}
               >
                 <ThemedText style={[styles.dayName, isSelected && styles.dayNameSelected]}>
-                  {day.name}
+                  {dayName}
                 </ThemedText>
                 <ThemedText style={[styles.dayDate, isSelected && styles.dayDateSelected]}>
                   {date.getDate()}
@@ -556,10 +634,9 @@ export default function BookingPage() {
         {Object.keys(groupedClasses).length === 0 ? (
           <View style={styles.noClassesContainer}>
             <ThemedText style={styles.noClassesText}>
-              На {selectedDateObj.toLocaleDateString('ru-RU', { 
+              На {getFullDayNameForDate(selectedDateObj).toLowerCase()}, {selectedDateObj.toLocaleDateString('ru-RU', { 
                 day: 'numeric', 
-                month: 'long',
-                weekday: 'long'
+                month: 'long'
               })} занятий нет
             </ThemedText>
             <ThemedText style={styles.noClassesSubtext}>

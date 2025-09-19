@@ -1,24 +1,27 @@
 {
   "expo": {
-    "name": "Fitness App",
+    "name": "BirgeGO",
     "slug": "fitness-app-native",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "fitnessappnative",
+    "scheme": "birgego",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.fitnessapp.mobile",
-      "buildNumber": "1.0.0"
+      "bundleIdentifier": "com.birgego.mobile",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.fitnessapp.mobile",
+      "package": "com.birgego.mobile",
       "versionCode": 1,
       "edgeToEdgeEnabled": true
     },

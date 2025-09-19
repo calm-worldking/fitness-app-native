@@ -92,9 +92,25 @@ class NotificationService {
 
     const notifications: WorkoutNotification[] = [];
     const now = new Date();
+    
+    console.log('📱 Scheduling notifications for workout:', {
+      classTitle: workout.classTitle,
+      startTime: workout.startTime.toISOString(),
+      localStartTime: workout.startTime.toLocaleString('ru-RU'),
+      now: now.toISOString(),
+      localNow: now.toLocaleString('ru-RU'),
+      timeUntilStart: Math.floor((workout.startTime.getTime() - now.getTime()) / (1000 * 60)) + ' минут'
+    });
 
     // Уведомление за 2 часа
     const twoHoursBefore = new Date(workout.startTime.getTime() - 2 * 60 * 60 * 1000);
+    console.log('📱 2-hour notification timing:', {
+      twoHoursBefore: twoHoursBefore.toISOString(),
+      localTwoHoursBefore: twoHoursBefore.toLocaleString('ru-RU'),
+      willSchedule: twoHoursBefore > now,
+      minutesUntilNotification: Math.floor((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60))
+    });
+    
     if (twoHoursBefore > now) {
       const notificationId = await this.scheduleNotification({
         title: 'Тренировка через 2 часа! 💪',
@@ -124,6 +140,13 @@ class NotificationService {
 
     // Уведомление за 1 час
     const oneHourBefore = new Date(workout.startTime.getTime() - 1 * 60 * 60 * 1000);
+    console.log('📱 1-hour notification timing:', {
+      oneHourBefore: oneHourBefore.toISOString(),
+      localOneHourBefore: oneHourBefore.toLocaleString('ru-RU'),
+      willSchedule: oneHourBefore > now,
+      minutesUntilNotification: Math.floor((oneHourBefore.getTime() - now.getTime()) / (1000 * 60))
+    });
+    
     if (oneHourBefore > now) {
       const notificationId = await this.scheduleNotification({
         title: 'Тренировка через час! ⏰',

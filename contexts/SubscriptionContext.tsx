@@ -6,15 +6,24 @@ interface SubscriptionDto {
   planId: string;
   userId: string;
   status: string;
-  planType: string;
   period: string;
-  peopleCount: number;
   price: number;
   startDate: string;
   endDate: string;
   autoRenewal: boolean;
+  cancelledAt?: string;
+  frozenUntil?: string;
   createdAt: string;
   updatedAt: string;
+  peopleCount: number;
+  isOwner: boolean;
+  owner?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  familyMembers: FamilyMemberDto[];
+  pendingInvitations: any[];
   plan: {
     id: string;
     name: string;
@@ -88,17 +97,22 @@ export function SubscriptionProvider({ children, userId }: SubscriptionProviderP
       console.log('📊 Subscription data received:', JSON.stringify(subscriptionData, null, 2));
       console.log('💳 Payment data received:', JSON.stringify(paymentData, null, 2));
 
-      if (subscriptionData?.activeSubscription) {
-        console.log('✅ Setting active subscription:', subscriptionData.activeSubscription.id);
-        setActiveSubscription(subscriptionData.activeSubscription);
+      // Обрабатываем новые данные из API
+      if (subscriptionData?.data?.activeSubscription) {
+        console.log('✅ Setting active subscription:', subscriptionData.data.activeSubscription.id);
+        setActiveSubscription(subscriptionData.data.activeSubscription);
+        
+        // Устанавливаем участников семьи из активной подписки
+        if (subscriptionData.data.activeSubscription.familyMembers) {
+          console.log('👥 Setting family members:', subscriptionData.data.activeSubscription.familyMembers.length);
+          setFamilyMembers(subscriptionData.data.activeSubscription.familyMembers);
+        } else {
+          console.log('❌ No family members found in active subscription');
+          setFamilyMembers([]);
+        }
       } else {
         console.log('❌ No active subscription found');
         setActiveSubscription(null);
-      }
-
-      if (subscriptionData?.familyMembers) {
-        setFamilyMembers(subscriptionData.familyMembers);
-      } else {
         setFamilyMembers([]);
       }
 
@@ -109,6 +123,11 @@ export function SubscriptionProvider({ children, userId }: SubscriptionProviderP
       }
     } catch (error) {
       console.log('❌ Failed to load subscription data:', error);
+      // Если ошибка авторизации, не сбрасываем данные
+      if (error.message && error.message.includes('Unauthorized')) {
+        console.log('🚫 Authorization failed, keeping existing data');
+        return;
+      }
       setActiveSubscription(null);
       setFamilyMembers([]);
       setPaymentHistory([]);
@@ -130,10 +149,8 @@ export function SubscriptionProvider({ children, userId }: SubscriptionProviderP
   };
 
   const removeFamilyMember = async (memberId: string) => {
-    if (!activeSubscription) return;
-
     try {
-      await api.removeFamilyMember(activeSubscription.id, memberId);
+      await api.removeFamilyMember(memberId);
       await loadSubscriptionData();
     } catch (error) {
       console.log('Failed to remove family member:', error);
@@ -182,11 +199,10 @@ export function SubscriptionProvider({ children, userId }: SubscriptionProviderP
     }
   };
 
-  // Загружаем данные при изменении userId
+  // Убираем автоматическую загрузку данных подписки
+  // Данные будут загружаться только при необходимости (например, при pull-to-refresh)
   useEffect(() => {
-    if (userId) {
-      loadSubscriptionData();
-    } else {
+    if (!userId) {
       setActiveSubscription(null);
       setFamilyMembers([]);
       setPaymentHistory([]);
@@ -194,10 +210,10 @@ export function SubscriptionProvider({ children, userId }: SubscriptionProviderP
   }, [userId]);
 
   const value: SubscriptionContextType = {
-    activeSubscription,
-    familyMembers,
-    paymentHistory,
-    loading,
+    activeSubscription: activeSubscription || null,
+    familyMembers: familyMembers || [],
+    paymentHistory: paymentHistory || [],
+    loading: loading || false,
     loadSubscriptionData,
     setActiveSubscription,
     addFamilyMember,

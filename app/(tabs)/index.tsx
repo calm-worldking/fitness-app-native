@@ -1,8 +1,8 @@
-import { Logo } from '@/components/Logo';
 import { SimpleLoadingScreen } from '@/components/SimpleLoadingScreen';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
 import { AppHeader } from '@/components/AppHeader';
+import { ReviewPrompt } from '@/components/ReviewPrompt';
 import { api, fetchGyms } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -17,7 +17,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -35,20 +34,20 @@ type GymCard = {
   id: string; 
   name: string; 
   address?: string | null;
-  _count?: { classes: number };
+  description?: string;
+  photos?: string[];
+  activityTags?: string[];
+  services?: string[];
+  rating?: number;
+  totalReviews?: number;
+  _count?: { classes: number; classTypes?: number };
 }
 
-const workoutTypes = [
-  { icon: 'fitness-center', label: 'Силовые', count: 57, color: PRIMARY, tag: 'силовые' },
-  { icon: 'self-improvement', label: 'Йога', count: 68, color: SECONDARY, tag: 'йога' },
-  { icon: 'pool', label: 'Плавание', count: 15, color: '#3EC6FF', tag: 'плавание' },
-  { icon: 'groups', label: 'Групповые', count: 42, color: '#A259FF', tag: 'групповые' },
-];
 
 const quickActions = [
   { icon: 'calendar-today', label: 'Расписание', route: '/schedule', color: PRIMARY },
   { icon: 'card-membership', label: 'Абонементы', route: '/subscription', color: SECONDARY },
-  { icon: 'groups', label: 'Семейная подписка', route: '/family/subscription', color: '#A259FF' },
+  { icon: 'search', label: 'Поиск', route: '/explore', color: '#A259FF' },
   { icon: 'analytics', label: 'Статистика', route: '/profile', color: SUCCESS },
 ];
 
@@ -63,7 +62,6 @@ export default function HomeScreen() {
     thisMonth: 0,
     weekStreak: 0,
   });
-  const insets = useSafeAreaInsets();
   
   // Кэш для залов
   const gymsCache = useMemo(() => new Map<string, any[]>(), []);
@@ -87,10 +85,10 @@ export default function HomeScreen() {
   const loadUserStats = async () => {
     try {
       console.log('📊 Loading user stats for home screen...');
-      const stats = await api.getUserStats();
+      const stats = await api.getUserStats() as any;
       setUserStats({
-        thisMonth: stats.thisMonth,
-        weekStreak: stats.weekStreak,
+        thisMonth: stats.thisMonth || 0,
+        weekStreak: stats.weekStreak || 0,
       });
     } catch (error) {
       console.log('❌ Failed to load user stats:', error);
@@ -107,7 +105,13 @@ export default function HomeScreen() {
         id: g.id, 
         name: g.name, 
         address: g.address,
-        _count: g._count
+        description: g.description || undefined,
+        photos: g.photos || [],
+        activityTags: g.activityTags || [],
+        services: g.services || [],
+        rating: g.rating,
+        totalReviews: g.totalReviews,
+        _count: g._count || { classes: 0, classTypes: 0 }
       }));
       
       // Обновляем кэш
@@ -128,16 +132,6 @@ export default function HomeScreen() {
     router.push(`/gym/${gymId}` as any);
   };
 
-  const handleWorkoutTypePress = (workoutType: any) => {
-    // Переходим на страницу залов с фильтром по типу тренировки
-    router.push({
-      pathname: '/(tabs)/explore' as any,
-      params: {
-        filter: workoutType.label.toLowerCase(),
-        activityTags: workoutType.tag || workoutType.label.toLowerCase()
-      }
-    });
-  };
 
   const handleQuickAction = (route: string) => {
     router.push(route as any);
@@ -175,10 +169,12 @@ export default function HomeScreen() {
           id: g.id, 
           name: g.name, 
           address: g.address,
-          description: g.description,
+          description: g.description || undefined,
           photos: g.photos || [],
           activityTags: g.activityTags || [],
           services: g.services || [],
+          rating: g.rating,
+          totalReviews: g.totalReviews,
           _count: g._count || { classes: 0, classTypes: 0 }
         }));
         
@@ -291,13 +287,19 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.gymsList}
             >
-              {gyms.map((gym) => (
+              {gyms?.map((gym) => (
                 <TouchableOpacity 
                   key={gym.id} 
                   style={styles.gymCard}
                   onPress={() => handleGymPress(gym.id)}
                 >
-                  <Image source={require('../../assets/images/placeholder_gym1.jpg')} style={styles.gymImage} />
+                  {gym.photos && gym.photos.length > 0 ? (
+                    <Image source={{ uri: gym.photos[0] }} style={styles.gymImage} />
+                  ) : (
+                    <View style={[styles.gymImage, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]}>
+                      <Ionicons name="image-outline" size={40} color="#ccc" />
+                    </View>
+                  )}
                   <View style={styles.gymInfo}>
                     <View style={styles.gymHeader}>
                       <ThemedText type="defaultSemiBold" style={styles.gymName}>
@@ -305,7 +307,9 @@ export default function HomeScreen() {
                       </ThemedText>
                       <View style={styles.ratingBadge}>
                         <Ionicons name="star" size={12} color={CARD_BG} />
-                        <ThemedText style={styles.ratingText}>9.6</ThemedText>
+                        <ThemedText style={styles.ratingText}>
+                          {gym.rating && gym.rating > 0 ? gym.rating.toFixed(1) : '—'}
+                        </ThemedText>
                       </View>
                     </View>
                     
@@ -333,31 +337,9 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Популярные виды тренировок */}
-        <View style={styles.workoutTypesSection}>
-          <ThemedText type="heading2" style={styles.sectionTitle}>
-            Популярные тренировки
-          </ThemedText>
-          <View style={styles.workoutTypesGrid}>
-            {workoutTypes.map((type, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.workoutTypeCard}
-                onPress={() => handleWorkoutTypePress(type)}
-              >
-                <View style={[styles.workoutTypeIcon, { backgroundColor: type.color + '20' }]}>
-                  <MaterialIcons name={type.icon as any} size={32} color={type.color} />
-                </View>
-                <ThemedText type="defaultSemiBold" style={styles.workoutTypeLabel}>
-                  {type.label}
-                </ThemedText>
-                <ThemedText style={styles.workoutTypeCount}>
-                  {type.count} залов
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+
+        {/* Промпт для отзывов */}
+        <ReviewPrompt />
 
         {/* Статистика и достижения */}
         <View style={styles.statsSection}>
@@ -369,7 +351,7 @@ export default function HomeScreen() {
               <View style={styles.statIcon}>
                 <MaterialIcons name="trending-up" size={24} color={SUCCESS} />
               </View>
-              <ThemedText type="heading3" style={styles.statValue}>{userStats.thisMonth}</ThemedText>
+              <ThemedText type="heading3" style={styles.statValue}>{userStats?.thisMonth || 0}</ThemedText>
               <ThemedText style={styles.statLabel}>Тренировок в месяц</ThemedText>
             </View>
             
@@ -377,7 +359,7 @@ export default function HomeScreen() {
               <View style={styles.statIcon}>
                 <MaterialIcons name="whatshot" size={24} color={PRIMARY} />
               </View>
-              <ThemedText type="heading3" style={styles.statValue}>{userStats.weekStreak}</ThemedText>
+              <ThemedText type="heading3" style={styles.statValue}>{userStats?.weekStreak || 0}</ThemedText>
               <ThemedText style={styles.statLabel}>Недель подряд</ThemedText>
             </View>
           </View>
@@ -639,46 +621,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   
-  // Workout types
-  workoutTypesSection: {
-    marginBottom: 32,
-  },
-  workoutTypesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  workoutTypeCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    width: (screenWidth - 56) / 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  workoutTypeIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  workoutTypeLabel: {
-    fontSize: 14,
-    color: TEXT_DARK,
-    marginBottom: 4,
-  },
-  workoutTypeCount: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-  },
   
   // Stats section
   statsSection: {

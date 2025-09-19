@@ -57,13 +57,7 @@ function LoginScreenContent() {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    Alert.alert('Скоро', `Вход через ${provider} будет доступен в следующих версиях`);
-  };
 
-  const handleForgotPassword = () => {
-    Alert.alert('Восстановление пароля', 'Функция восстановления пароля будет доступна скоро');
-  };
 
   return (
     <KeyboardAvoidingView 
@@ -143,12 +137,6 @@ function LoginScreenContent() {
             </View>
           </View>
 
-          {/* Забыли пароль */}
-          <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>
-              Забыли пароль?
-            </Text>
-          </TouchableOpacity>
 
           {/* Кнопка входа */}
           <Button 
@@ -167,31 +155,6 @@ function LoginScreenContent() {
           </Button>
         </View>
 
-        {/* Разделитель */}
-        <View style={styles.dividerSection}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>или</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Социальные кнопки */}
-        <View style={styles.socialSection}>
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={() => handleSocialLogin('Google')}
-          >
-            <MaterialIcons name="login" size={20} color={TEXT_DARK} />
-            <Text style={styles.socialButtonText}>Войти через Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={() => handleSocialLogin('Apple')}
-          >
-            <MaterialIcons name="smartphone" size={20} color={TEXT_DARK} />
-            <Text style={styles.socialButtonText}>Войти через Apple</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Регистрация */}
         <View style={styles.registerSection}>
@@ -205,29 +168,6 @@ function LoginScreenContent() {
           </TouchableOpacity>
         </View>
 
-        {/* Дополнительная информация */}
-        <View style={styles.infoSection}>
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="groups" size={20} color={PRIMARY} />
-            <Text style={styles.benefitText}>
-              Семейная подписка до 4 человек
-            </Text>
-          </View>
-          
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="fitness-center" size={20} color={SECONDARY} />
-            <Text style={styles.benefitText}>
-              Безлимитный доступ ко всем залам
-            </Text>
-          </View>
-          
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="analytics" size={20} color={SUCCESS} />
-            <Text style={styles.benefitText}>
-              Отслеживание прогресса всей семьи
-            </Text>
-          </View>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -319,15 +259,6 @@ const styles = StyleSheet.create({
     right: 16,
     padding: 4,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: PRIMARY,
-    fontWeight: '600',
-  },
   
   // Login button
   loginButton: {
@@ -352,44 +283,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   
-  // Divider
-  dividerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: BG,
-  },
-  dividerText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    marginHorizontal: 16,
-  },
-  
-  // Social buttons
-  socialSection: {
-    gap: 12,
-    marginBottom: 32,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: BG,
-  },
-  socialButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: TEXT_DARK,
-    marginLeft: 12,
-  },
   
   // Register section
   registerSection: {
@@ -406,25 +299,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: PRIMARY,
     fontWeight: '600',
-  },
-  
-  // Info section
-  infoSection: {
-    backgroundColor: BG,
-    borderRadius: 16,
-    padding: 20,
-    gap: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  benefitText: {
-    fontSize: 14,
-    color: TEXT_DARK,
-    marginLeft: 12,
-    flex: 1,
-    fontWeight: '500',
   },
 }); 
 

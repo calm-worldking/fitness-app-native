@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   Alert,
@@ -9,9 +8,11 @@ import {
   StyleSheet,
   Modal,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { api } from '@/lib/api';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useUser } from '@/app/_layout';
 
 // Цвета
 const PRIMARY = '#007AFF';
@@ -31,8 +32,7 @@ interface Invitation {
     email: string;
   };
   subscription: {
-    planName: string;
-    period: string;
+    plan: string; // API возвращает plan, а не planName
     owner: {
       name: string;
     };
@@ -51,14 +51,21 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [respondingToInvitation, setRespondingToInvitation] = useState<string | null>(null);
+  const { loadSubscriptionData } = useSubscription();
+  const { signIn } = useUser();
 
-  console.log('🔔 NotificationsModal rendered, visible:', visible);
 
   const loadInvitations = async () => {
     try {
       setLoading(true);
       const response = await api.getInvitations();
-      setInvitations(response.invitations || []);
+      console.log('📋 Invitations response:', response);
+      
+      // API возвращает { invitations: { incoming: [], outgoing: [] } }
+      // Нам нужны только входящие приглашения
+      const incomingInvitations = (response as any).invitations?.incoming || [];
+      setInvitations(incomingInvitations);
     } catch (error) {
       console.log('Failed to load invitations:', error);
     } finally {
@@ -79,14 +86,42 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
   };
 
   const handleRespondToInvitation = async (invitationId: string, action: 'accept' | 'reject') => {
+    // Предотвращаем двойное нажатие
+    if (respondingToInvitation === invitationId) {
+      console.log('⚠️ Already responding to this invitation, ignoring duplicate request');
+      return;
+    }
+
     try {
+      setRespondingToInvitation(invitationId);
+      console.log(`🎯 Responding to invitation ${invitationId} with action: ${action}`);
+      
       const result = await api.respondToInvitation(invitationId, action);
+      console.log('✅ Invitation response result:', result);
       
       if (action === 'accept') {
         Alert.alert(
           'Успешно!',
-          result.message,
-          [{ text: 'OK' }]
+          (result as any).message || 'Приглашение принято! Вы стали членом семьи.',
+          [{ 
+            text: 'OK',
+            onPress: async () => {
+              // Обновляем данные подписки и пользователя после принятия приглашения
+              console.log('🔄 Updating subscription and user data after accepting invitation...');
+              try {
+                // Обновляем данные подписки
+                await loadSubscriptionData();
+                console.log('✅ Subscription data updated successfully');
+                
+                // Обновляем данные пользователя
+                const userResponse = await api.getCurrentUser();
+                signIn(userResponse.user);
+                console.log('✅ User data updated successfully');
+              } catch (error) {
+                console.error('❌ Failed to update data:', error);
+              }
+            }
+          }]
         );
       } else {
         Alert.alert(
@@ -98,8 +133,28 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
       // Обновляем список приглашений
       await loadInvitations();
     } catch (error) {
-      console.log('Failed to respond to invitation:', error);
-      Alert.alert('Ошибка', 'Не удалось обработать приглашение');
+      console.error('❌ Failed to respond to invitation:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Не авторизован')) {
+          errorMessage = 'Ошибка авторизации. Попробуйте войти в приложение заново.';
+        } else if (error.message.includes('404')) {
+          errorMessage = 'Приглашение не найдено или истекло.';
+        } else if (error.message.includes('400')) {
+          errorMessage = 'Некорректные данные. Проверьте приглашение и попробуйте снова.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Ошибка', `Не удалось обработать приглашение: ${errorMessage}`);
+    } finally {
+      setRespondingToInvitation(null);
     }
   };
 
@@ -125,7 +180,6 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
     return `Истекает через ${diffDays} дней`;
   };
 
-  console.log('🔔 Rendering NotificationsModal with visible:', visible);
 
   return (
     <Modal
@@ -154,7 +208,7 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
             <View style={styles.loadingContainer}>
               <ThemedText>Загрузка уведомлений...</ThemedText>
             </View>
-          ) : invitations.length === 0 ? (
+          ) : (invitations?.length || 0) === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="notifications-outline" size={64} color={TEXT_LIGHT} />
               <ThemedText style={styles.emptyStateText}>
@@ -163,7 +217,7 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
             </View>
           ) : (
             <View style={styles.invitationsList}>
-              {invitations.map((invitation) => (
+              {invitations?.map((invitation) => (
                 <View key={invitation.id} style={styles.invitationCard}>
                   <View style={styles.invitationHeader}>
                     <View style={styles.invitationIcon}>
@@ -183,7 +237,7 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
                     <View style={styles.detailRow}>
                       <ThemedText style={styles.detailLabel}>План:</ThemedText>
                       <ThemedText style={styles.detailValue}>
-                        {invitation.subscription.planName} ({invitation.subscription.period})
+                        {invitation.subscription.plan}
                       </ThemedText>
                     </View>
                     
@@ -212,7 +266,7 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
                       <View style={styles.messageContainer}>
                         <ThemedText style={styles.messageLabel}>Сообщение:</ThemedText>
                         <ThemedText style={styles.messageText}>
-                          "{invitation.message}"
+                          &ldquo;{invitation.message}&rdquo;
                         </ThemedText>
                       </View>
                     )}
@@ -220,22 +274,32 @@ export function NotificationsModal({ visible, onClose }: NotificationsModalProps
 
                   <View style={styles.invitationActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.rejectButton]}
+                      style={[
+                        styles.actionButton, 
+                        styles.rejectButton,
+                        respondingToInvitation === invitation.id && styles.disabledButton
+                      ]}
                       onPress={() => handleRespondToInvitation(invitation.id, 'reject')}
+                      disabled={respondingToInvitation === invitation.id}
                     >
                       <Ionicons name="close" size={20} color={ERROR} />
                       <ThemedText style={[styles.actionButtonText, styles.rejectButtonText]}>
-                        Отклонить
+                        {respondingToInvitation === invitation.id ? 'Отклоняем...' : 'Отклонить'}
                       </ThemedText>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.acceptButton]}
+                      style={[
+                        styles.actionButton, 
+                        styles.acceptButton,
+                        respondingToInvitation === invitation.id && styles.disabledButton
+                      ]}
                       onPress={() => handleRespondToInvitation(invitation.id, 'accept')}
+                      disabled={respondingToInvitation === invitation.id}
                     >
                       <Ionicons name="checkmark" size={20} color={SUCCESS} />
                       <ThemedText style={[styles.actionButtonText, styles.acceptButtonText]}>
-                        Принять
+                        {respondingToInvitation === invitation.id ? 'Принимаем...' : 'Принять'}
                       </ThemedText>
                     </TouchableOpacity>
                   </View>
@@ -402,5 +466,8 @@ const styles = StyleSheet.create({
   },
   acceptButtonText: {
     color: '#FFFFFF',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
 });

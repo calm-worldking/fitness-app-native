@@ -3,13 +3,14 @@ import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
 import { AppHeader } from '@/components/AppHeader';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { api } from '@/lib/api';
+import { api, getToken } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Alert,
     Animated,
     Modal,
+    Platform,
     RefreshControl,
     ScrollView,
     StatusBar,
@@ -63,70 +64,56 @@ interface SubscriptionOption {
   icon: string;
 }
 
-const subscriptionOptions: SubscriptionOption[] = [
+// Планы подписок теперь загружаются из API
+const defaultSubscriptionOptions: SubscriptionOption[] = [
   {
     id: 'silver',
     title: 'Silver Pass',
-    subtitle: 'Стандарт + групповые тренировки',
+    subtitle: 'Базовый доступ к залу',
     prices: {
-      monthly: {
-        1: 41667,  // 350000 / 8.4
-        2: 71429,  // 600000 / 8.4
-        3: 89286   // 750000 / 8.4
-      },
+      monthly: { 1: 0, 2: 0, 3: 0 }, // Не используется, только yearly
       yearly: {
         1: 350000,
         2: 600000,
         3: 750000
       }
     },
-    description: '30 занятий в месяц',
-    color: PRIMARY,
-    icon: 'star-outline',
+    description: 'Базовый доступ к залу на год',
+    color: '#C0C0C0',
+    icon: 'star',
+    popular: false,
     features: [
-      { text: 'Доступ ко всем залам сети', included: true },
-      { text: '30 занятий в месяц', included: true },
-      { text: 'Групповые тренировки', included: true },
-      { text: 'Стандартные программы тренировок', included: true },
-      { text: '1 заморозка в год (30 дней) — бесплатно', included: true },
-      { text: 'Дополнительные 14 дней заморозки за 5 000 ₸', included: true },
-      { text: 'Запрос заморозки минимум за 7 дней', included: true },
-      { text: 'VIP зоны и оборудование', included: false },
+      { text: 'Доступ к основному залу', included: true },
+      { text: 'Групповые занятия', included: true },
+      { text: 'Раздевалки и душевые', included: true },
+      { text: 'Wi-Fi', included: true },
       { text: 'Персональный тренер', included: false },
-      { text: 'Приоритетная запись', included: false },
+      { text: 'Спа-процедуры', included: false },
     ]
   },
   {
     id: 'gold',
     title: 'Gold Pass',
-    subtitle: 'Стандарт + VIP зоны',
+    subtitle: 'Премиум доступ к залу',
     prices: {
-      monthly: {
-        1: 59524,   // 500000 / 8.4
-        2: 107143,  // 900000 / 8.4
-        3: 148810   // 1250000 / 8.4
-      },
+      monthly: { 1: 0, 2: 0, 3: 0 }, // Не используется, только yearly
       yearly: {
         1: 500000,
         2: 900000,
         3: 1250000
       }
     },
-    description: '30 занятий в месяц',
-    color: SECONDARY,
+    description: 'Премиум доступ к залу на год',
+    color: '#FFD700',
     icon: 'star',
     popular: true,
     features: [
-      { text: 'Все преимущества Silver Pass', included: true, highlight: true },
-      { text: '30 занятий в месяц', included: true },
-      { text: 'Стандартные и VIP зоны', included: true, highlight: true },
-      { text: '2 заморозки в год по 30 дней каждая — бесплатно', included: true, highlight: true },
-      { text: 'Разбивка заморозки на 4×15 дней', included: true, highlight: true },
-      { text: 'Автопродление при заморозке', included: true, highlight: true },
-      { text: 'Ускоренная реактивация', included: true, highlight: true },
-      { text: 'Приоритетная запись', included: true, highlight: true },
-      { text: 'Персональный тренер (2 консультации)', included: true, highlight: true },
-      { text: 'VIP оборудование и услуги', included: true, highlight: true },
+      { text: 'Доступ ко всем зонам', included: true },
+      { text: 'Безлимитные посещения', included: true },
+      { text: 'Персональный тренер', included: true },
+      { text: 'Спа-процедуры', included: true },
+      { text: 'Бассейн', included: true },
+      { text: 'Групповые занятия', included: true },
     ]
   }
 ];
@@ -137,37 +124,32 @@ const additionalServices = [
     icon: 'fitness-center',
     title: 'Персональный тренер',
     description: 'Индивидуальные занятия с профессиональным тренером',
-    price: 'от 5 000 ₸',
+    price: 'По запросу',
     color: PRIMARY,
   },
   {
     icon: 'spa',
     title: 'СПА услуги',
     description: 'Массаж, сауна, wellness процедуры',
-    price: 'от 3 000 ₸',
+    price: 'По запросу',
     color: '#00BCD4',
   },
   {
     icon: 'restaurant',
     title: 'Спортивное питание',
     description: 'Протеины, витамины, спортивные добавки',
-    price: 'от 2 500 ₸',
+    price: 'По запросу',
     color: '#4CAF50',
   },
 ];
 
-// Статистика подписок
-const subscriptionStats = [
-  { label: 'Активных участников', value: '1,247', icon: 'people' },
-  { label: 'Семейных подписок', value: '312', icon: 'groups' },
-  { label: 'Средняя экономия', value: '35%', icon: 'savings' },
-];
 
 export default function SubscriptionScreen() {
   const { 
     activeSubscription, 
     familyMembers, 
     paymentHistory, 
+    loading,
     loadSubscriptionData,
     setActiveSubscription,
     addFamilyMember,
@@ -177,18 +159,29 @@ export default function SubscriptionScreen() {
     purchaseSubscription
   } = useSubscription();
   
-  const [selectedType, setSelectedType] = useState<SubscriptionType>('gold');
+  // Безопасные значения из контекста
+  const safeActiveSubscription = activeSubscription || null;
+  const safeFamilyMembers = familyMembers || [];
+  const safePaymentHistory = paymentHistory || [];
+  const safeLoading = loading || false;
+  
+  const [selectedType, setSelectedType] = useState<SubscriptionType>('silver');
   const [selectedPeople, setSelectedPeople] = useState<PeopleCount>(1);
-  const [selectedPeriod, setSelectedPeriod] = useState<PaymentPeriod>('monthly');
+  const [selectedPeriod, setSelectedPeriod] = useState<PaymentPeriod>('yearly');
   const [refreshing, setRefreshing] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedPlanForDetails, setSelectedPlanForDetails] = useState<SubscriptionOption | null>(null);
+  const [subscriptionOptions, setSubscriptionOptions] = useState<SubscriptionOption[]>(defaultSubscriptionOptions);
 
   // Модальные окна для управления
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
   const [showAddFamilyModal, setShowAddFamilyModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviteMethod, setInviteMethod] = useState<'email' | 'phone'>('email');
   const [showFreezeHistoryModal, setShowFreezeHistoryModal] = useState(false);
   const [pendingSubscription, setPendingSubscription] = useState<{type: SubscriptionType, period: PaymentPeriod, people: PeopleCount} | null>(null);
   
@@ -200,6 +193,10 @@ export default function SubscriptionScreen() {
 
   const insets = useSafeAreaInsets();
 
+  // Состояние для FAQ
+  const [openFaqItems, setOpenFaqItems] = useState<Set<number>>(new Set());
+  const [faqAnimations, setFaqAnimations] = useState<Map<number, Animated.Value>>(new Map());
+
   // Анимационные значения
   const fadeAnim = useState(new Animated.Value(1))[0];
   const scaleAnim = useState(new Animated.Value(1))[0];
@@ -208,12 +205,165 @@ export default function SubscriptionScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadSubscriptionData();
+    await loadSubscriptionPlans();
     setRefreshing(false);
   };
 
+  // Функция для переключения состояния FAQ
+  const toggleFaqItem = (index: number) => {
+    const newOpenItems = new Set(openFaqItems);
+    const isCurrentlyOpen = newOpenItems.has(index);
+    
+    if (isCurrentlyOpen) {
+      newOpenItems.delete(index);
+    } else {
+      newOpenItems.add(index);
+    }
+    
+    setOpenFaqItems(newOpenItems);
+    
+    // Анимация
+    const newAnimations = new Map(faqAnimations);
+    if (!newAnimations.has(index)) {
+      newAnimations.set(index, new Animated.Value(0));
+    }
+    
+    const animation = newAnimations.get(index)!;
+    Animated.timing(animation, {
+      toValue: isCurrentlyOpen ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true, // Используем native driver для лучшей производительности
+    }).start();
+    
+    setFaqAnimations(newAnimations);
+  };
+
+  // Данные FAQ
+  const faqData = [
+    {
+      question: "Как работает система бронирования занятий?",
+      answer: "Вы можете бронировать занятия через мобильное приложение. Найдите интересующий зал, выберите дату и время, затем нажмите 'Забронировать'. За 2 часа и за 1 час до начала занятия вы получите уведомление. Занятие можно отменить в любое время до его начала."
+    },
+    {
+      question: "Можно ли заморозить абонемент?",
+      answer: "Да, вы можете заморозить абонемент на срок от 7 до 30 дней. Заявка на заморозку подается минимум за 7 дней до желаемой даты начала заморозки. Silver Pass: 1 бесплатная заморозка до 30 дней в год. Gold Pass: 2 бесплатные заморозки по 30 дней каждая в год."
+    },
+    {
+      question: "Как работает семейная подписка?",
+      answer: "Семейная подписка позволяет пригласить до 2-3 человек (в зависимости от тарифа) в ваш абонемент. Владелец подписки может приглашать по email или телефону. Приглашенные пользователи получают уведомление и могут принять или отклонить приглашение."
+    },
+    {
+      question: "Что входит в Silver Pass?",
+      answer: "Silver Pass включает доступ к основному залу, групповые занятия, раздевалки и душевые, Wi-Fi. Это базовый тариф для индивидуальных тренировок. Подходит для тех, кто хочет начать свой фитнес-путь."
+    },
+    {
+      question: "Что входит в Gold Pass?",
+      answer: "Gold Pass включает все возможности Silver Pass плюс доступ к премиум зонам, приоритетное бронирование занятий, скидки на дополнительные услуги, эксклюзивные тренировки и больше возможностей для заморозки абонемента."
+    },
+    {
+      question: "Как отменить занятие?",
+      answer: "Отменить занятие можно в любое время до его начала. В разделе 'Расписание' найдите ваше занятие и нажмите 'Отменить занятие'. Отмененное занятие освободит место для других пользователей."
+    },
+    {
+      question: "Можно ли пригласить друзей на занятие?",
+      answer: "Да, в разделе 'Расписание' есть кнопка 'Позвать' для каждого забронированного занятия. Вы можете пригласить друзей присоединиться к вашему занятию, если у них есть активная подписка."
+    },
+    {
+      question: "Что делать, если не могу посетить занятие?",
+      answer: "Если вы не можете посетить занятие, обязательно отмените бронирование заранее. Это освободит место для других пользователей. При частых пропусках без отмены могут применяться ограничения на бронирование."
+    }
+  ];
+
+  const loadSubscriptionPlans = async () => {
+    try {
+      console.log('🔄 Загружаем планы подписки...');
+      const response = await api.getSubscriptionPlans();
+      console.log('📊 Ответ API:', response);
+      if (response.plans && response.plans.length > 0) {
+        // Группируем планы по типу (Silver/Gold)
+        const silverPlans = response.plans.filter((plan: any) => plan.name.includes('Silver'));
+        const goldPlans = response.plans.filter((plan: any) => plan.name.includes('Gold'));
+        
+        console.log('🔍 Silver планы:', silverPlans);
+        console.log('🔍 Gold планы:', goldPlans);
+        
+        const groupedPlans: SubscriptionOption[] = [];
+        
+        // Создаем Silver Pass план
+        if (silverPlans.length > 0) {
+          console.log('🔧 Создаем Silver Pass план...');
+          const silverPlan = {
+            id: 'silver' as SubscriptionType,
+            title: 'Silver Pass',
+            subtitle: 'Базовый доступ к залу',
+            prices: {
+              monthly: { 1: 0, 2: 0, 3: 0 },
+              yearly: {
+                1: silverPlans.find((p: any) => p.name.includes('1 человек'))?.price || 250000,
+                2: silverPlans.find((p: any) => p.name.includes('2 человека'))?.price || 450000,
+                3: silverPlans.find((p: any) => p.name.includes('3 человека'))?.price || 600000,
+              }
+            },
+            description: 'Базовый доступ к залу на год',
+            color: '#C0C0C0',
+            icon: 'star',
+            popular: false,
+            features: silverPlans[0]?.features?.map((feature: string) => ({
+              text: feature,
+              included: true
+            })) || []
+          };
+          groupedPlans.push(silverPlan);
+        }
+        
+        // Создаем Gold Pass план
+        if (goldPlans.length > 0) {
+          console.log('🔧 Создаем Gold Pass план...');
+          const goldPlan = {
+            id: 'gold' as SubscriptionType,
+            title: 'Gold Pass',
+            subtitle: 'Премиум доступ к залу',
+            prices: {
+              monthly: { 1: 0, 2: 0, 3: 0 },
+              yearly: {
+                1: goldPlans.find((p: any) => p.name.includes('1 человек'))?.price || 350000,
+                2: goldPlans.find((p: any) => p.name.includes('2 человека'))?.price || 650000,
+                3: goldPlans.find((p: any) => p.name.includes('3 человека'))?.price || 900000,
+              }
+            },
+            description: 'Премиум доступ к залу на год',
+            color: '#FFD700',
+            icon: 'star',
+            popular: true,
+            features: goldPlans[0]?.features?.map((feature: string) => ({
+              text: feature,
+              included: true
+            })) || []
+          };
+          groupedPlans.push(goldPlan);
+        }
+        
+        console.log('✅ Установлены планы:', groupedPlans);
+        setSubscriptionOptions(groupedPlans);
+      } else {
+        console.log('⚠️ Планы не найдены, используем дефолтные');
+        setSubscriptionOptions(defaultSubscriptionOptions);
+      }
+    } catch (error) {
+      console.log('❌ Ошибка загрузки планов:', error);
+      // Используем дефолтные планы в случае ошибки
+      setSubscriptionOptions(defaultSubscriptionOptions);
+    }
+  };
+
+  // Загружаем планы при монтировании компонента
+  useEffect(() => {
+    loadSubscriptionPlans();
+  }, []);
+
   // Управление абонементом
   const handleFreezeSubscription = async () => {
-    if (!activeSubscription) return;
+    if (!safeActiveSubscription) return;
 
     if (!freezeStartDate) {
       Alert.alert('Ошибка', 'Выберите дату начала заморозки');
@@ -221,7 +371,7 @@ export default function SubscriptionScreen() {
     }
 
     try {
-      const result = await api.freezeSubscription(activeSubscription.id, {
+      const result = await api.freezeSubscription(safeActiveSubscription?.id || '', {
         days: freezeDays,
         startDate: freezeStartDate,
         reason: freezeReason
@@ -247,7 +397,7 @@ export default function SubscriptionScreen() {
   };
 
   const handleRemoveFamilyMember = async (memberId: string) => {
-    if (!activeSubscription) return;
+    if (!safeActiveSubscription) return;
 
     try {
       await removeFamilyMember(memberId);
@@ -257,48 +407,201 @@ export default function SubscriptionScreen() {
   };
 
   const handleAddFamilyMember = () => {
-    if (!activeSubscription) return;
+    console.log('🔍 Checking active subscription:', safeActiveSubscription);
+    if (!safeActiveSubscription) {
+      Alert.alert('Ошибка', 'У вас нет активной подписки');
+      return;
+    }
 
-    Alert.prompt(
-      'Пригласить в семейную подписку',
-      'Введите email для отправки приглашения:',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Пригласить',
-          onPress: async (email) => {
-            if (!email) {
-              Alert.alert('Ошибка', 'Email обязателен');
-              return;
+    // Проверяем, поддерживает ли платформа Alert.prompt
+    if (Platform.OS === 'ios') {
+      Alert.alert(
+        'Пригласить в семейную подписку',
+        'Выберите способ приглашения:',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'По email',
+            onPress: () => {
+              Alert.prompt(
+                'Пригласить по email',
+                'Введите email для отправки приглашения:',
+                [
+                  { text: 'Отмена', style: 'cancel' },
+                  {
+                    text: 'Пригласить',
+                    onPress: async (email) => {
+                      if (!email) {
+                        Alert.alert('Ошибка', 'Email обязателен');
+                        return;
+                      }
+
+                      // Валидация email
+                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      if (!emailRegex.test(email)) {
+                        Alert.alert('Ошибка', 'Введите корректный email');
+                        return;
+                      }
+
+                      await sendEmailInvitation(email);
+                    }
+                  }
+                ],
+                'plain-text'
+              );
             }
+          },
+          {
+            text: 'По номеру телефона',
+            onPress: () => {
+              Alert.prompt(
+                'Пригласить по номеру телефона',
+                'Введите номер телефона для отправки приглашения:',
+                [
+                  { text: 'Отмена', style: 'cancel' },
+                  {
+                    text: 'Пригласить',
+                    onPress: async (phone) => {
+                      if (!phone) {
+                        Alert.alert('Ошибка', 'Номер телефона обязателен');
+                        return;
+                      }
 
-            // Валидация email
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-              Alert.alert('Ошибка', 'Введите корректный email');
-              return;
-            }
+                      // Валидация номера телефона (базовая)
+                      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,}$/;
+                      if (!phoneRegex.test(phone)) {
+                        Alert.alert('Ошибка', 'Введите корректный номер телефона');
+                        return;
+                      }
 
-            try {
-              const result = await api.sendInvitation(activeSubscription.id, { email }) as any;
-              setShowAddFamilyModal(false);
-              Alert.alert('Успешно!', result.message);
-              
-              // Обновляем данные подписки
-              await loadSubscriptionData();
-            } catch (error) {
-              console.log('Failed to send invitation:', error);
-              Alert.alert('Ошибка', 'Не удалось отправить приглашение');
+                      await sendPhoneInvitation(phone);
+                    }
+                  }
+                ],
+                'plain-text'
+              );
             }
           }
+        ]
+      );
+    } else {
+      // Для Android показываем модальное окно для ввода данных
+      setInviteMethod('email');
+      setInviteEmail('');
+      setInvitePhone('');
+      setShowInviteModal(true);
+    }
+  };
+
+  const sendEmailInvitation = async (email: string) => {
+    try {
+      console.log('📧 Sending email invitation to:', email);
+      console.log('📧 Subscription ID:', safeActiveSubscription?.id);
+      console.log('📧 Token exists:', !!(await getToken()));
+      
+      const result = await api.sendInvitation(safeActiveSubscription?.id || '', { email }) as any;
+      console.log('📧 Invitation result:', result);
+      
+      setShowAddFamilyModal(false);
+      Alert.alert('Успешно!', result.message || 'Приглашение отправлено');
+      
+      // Обновляем данные подписки
+      await loadSubscriptionData();
+    } catch (error) {
+      console.error('❌ Failed to send email invitation:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Не авторизован')) {
+          errorMessage = 'Ошибка авторизации. Попробуйте войти в приложение заново.';
+        } else if (error.message.includes('404')) {
+          errorMessage = 'Подписка не найдена. Проверьте, что у вас есть активная подписка.';
+        } else if (error.message.includes('400')) {
+          errorMessage = 'Некорректные данные. Проверьте email и попробуйте снова.';
+        } else {
+          errorMessage = error.message;
         }
-      ],
-      'plain-text'
-    );
+      }
+      
+      Alert.alert('Ошибка', `Не удалось отправить приглашение: ${errorMessage}`);
+    }
+  };
+
+  const sendPhoneInvitation = async (phone: string) => {
+    try {
+      console.log('📱 Sending phone invitation to:', phone);
+      console.log('📱 Subscription ID:', safeActiveSubscription?.id);
+      console.log('📱 Token exists:', !!(await getToken()));
+      
+      const result = await api.sendInvitation(safeActiveSubscription?.id || '', { phone }) as any;
+      console.log('📱 Invitation result:', result);
+      
+      setShowAddFamilyModal(false);
+      setShowInviteModal(false);
+      Alert.alert('Успешно!', result.message || 'Приглашение отправлено');
+      
+      // Обновляем данные подписки
+      await loadSubscriptionData();
+    } catch (error) {
+      console.error('❌ Failed to send phone invitation:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Не авторизован')) {
+          errorMessage = 'Ошибка авторизации. Попробуйте войти в приложение заново.';
+        } else if (error.message.includes('404')) {
+          errorMessage = 'Подписка не найдена. Проверьте, что у вас есть активная подписка.';
+        } else if (error.message.includes('400')) {
+          errorMessage = 'Некорректные данные. Проверьте номер телефона и попробуйте снова.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Ошибка', `Не удалось отправить приглашение: ${errorMessage}`);
+    }
+  };
+
+  const handleInviteFromModal = async () => {
+    if (inviteMethod === 'email') {
+      if (!inviteEmail.trim()) {
+        Alert.alert('Ошибка', 'Введите email');
+        return;
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(inviteEmail)) {
+        Alert.alert('Ошибка', 'Введите корректный email');
+        return;
+      }
+      
+      await sendEmailInvitation(inviteEmail);
+    } else {
+      if (!invitePhone.trim()) {
+        Alert.alert('Ошибка', 'Введите номер телефона');
+        return;
+      }
+      
+      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,}$/;
+      if (!phoneRegex.test(invitePhone)) {
+        Alert.alert('Ошибка', 'Введите корректный номер телефона');
+        return;
+      }
+      
+      await sendPhoneInvitation(invitePhone);
+    }
   };
 
   const handleCancelSubscription = async () => {
-    if (!activeSubscription) return;
+    if (!safeActiveSubscription) return;
 
     Alert.alert(
       'Отменить подписку',
@@ -310,7 +613,7 @@ export default function SubscriptionScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🔄 Cancelling subscription:', activeSubscription.id);
+              console.log('🔄 Cancelling subscription:', safeActiveSubscription?.id);
               await cancelSubscription();
               
               Alert.alert(
@@ -354,12 +657,13 @@ export default function SubscriptionScreen() {
   };
 
   const getCurrentPrice = (option: SubscriptionOption): number => {
-    return option.prices[selectedPeriod][selectedPeople];
+    return option?.prices?.[selectedPeriod]?.[selectedPeople] || 0;
   };
 
   const calculateSavings = (option: SubscriptionOption): number => {
-    const monthlyPrice = option.prices.monthly[selectedPeople];
-    const yearlyPrice = option.prices.yearly[selectedPeople];
+    const monthlyPrice = option?.prices?.monthly?.[selectedPeople] || 0;
+    const yearlyPrice = option?.prices?.yearly?.[selectedPeople] || 0;
+    if (monthlyPrice === 0) return 0;
     return Math.round(((monthlyPrice * 12 - yearlyPrice) / (monthlyPrice * 12)) * 100);
   };
 
@@ -421,41 +725,44 @@ export default function SubscriptionScreen() {
 
   const handleSubscribe = async (type: SubscriptionType) => {
     try {
-      console.log(`Подписка на ${type}`);
+      console.log(`Заявка на ${type}`);
 
-      // Если подписка на несколько человек, показываем модальное окно для добавления членов семьи
-      if (selectedPeople > 1) {
-        setPendingSubscription({ type, period: selectedPeriod, people: selectedPeople });
-        setShowAddFamilyModal(true);
+      // Загружаем планы из API, чтобы найти правильный план
+      const response = await api.getSubscriptionPlans();
+      if (!response.plans || response.plans.length === 0) {
+        Alert.alert('Ошибка', 'Планы подписки не найдены');
         return;
       }
 
-      // Если есть активная подписка, сначала отменяем её
-      if (activeSubscription) {
-        console.log('🔄 Отменяем активную подписку перед покупкой новой...');
-        await cancelSubscription();
-        console.log('✅ Активная подписка отменена');
+      // Находим план по типу и количеству людей
+      const planName = `${type === 'silver' ? 'Silver' : 'Gold'} Pass (${selectedPeople} ${selectedPeople === 1 ? 'человек' : selectedPeople === 2 ? 'человека' : 'человека'})`;
+      const selectedPlan = response.plans.find((plan: any) => plan.name === planName);
+      
+      if (!selectedPlan) {
+        Alert.alert('Ошибка', `План ${planName} не найден`);
+        return;
       }
 
-      // Выполняем покупку подписки через контекст
-      const result = await purchaseSubscription(
-        type,
-        selectedPeriod,
-        selectedPeople
-      );
+      // Создаем заявку на абонемент
+      const result = await api.createSubscriptionRequest({
+        planId: selectedPlan.id,
+        period: selectedPeriod,
+        peopleCount: selectedPeople,
+        message: `Заявка на ${selectedPeople} ${selectedPeople === 1 ? 'человека' : 'человек'}`
+      }) as any;
 
-      console.log('Результат покупки:', result);
-
-      // Показываем сообщение об успехе
       Alert.alert(
-        'Успешно!', 
-        `Подписка ${result.plan.name} активирована до ${new Date(result.endDate).toLocaleDateString('ru-RU')}`,
+        'Заявка отправлена!', 
+        'Ваша заявка на абонемент отправлена. Наши сотрудники свяжутся с вами для подтверждения и оплаты.',
         [{ text: 'OK' }]
       );
 
+      // Обновляем данные
+      await loadSubscriptionData();
+
     } catch (error) {
-      console.error('Ошибка при покупке подписки:', error);
-      Alert.alert('Ошибка', 'Не удалось оформить подписку. Попробуйте еще раз.');
+      console.log('Failed to create subscription request:', error);
+      Alert.alert('Ошибка', 'Не удалось отправить заявку на абонемент');
     }
   };
 
@@ -464,15 +771,30 @@ export default function SubscriptionScreen() {
 
     try {
       // Если есть активная подписка, сначала отменяем её
-      if (activeSubscription) {
+      if (safeActiveSubscription) {
         console.log('🔄 Отменяем активную подписку перед покупкой новой...');
         await cancelSubscription();
         console.log('✅ Активная подписка отменена');
       }
 
+      // Находим план по типу и количеству людей
+      const response = await api.getSubscriptionPlans();
+      if (!response.plans || response.plans.length === 0) {
+        Alert.alert('Ошибка', 'Планы подписки не найдены');
+        return;
+      }
+
+      const planName = `${pendingSubscription.type === 'silver' ? 'Silver' : 'Gold'} Pass (${pendingSubscription.people} ${pendingSubscription.people === 1 ? 'человек' : pendingSubscription.people === 2 ? 'человека' : 'человека'})`;
+      const selectedPlan = response.plans.find((plan: any) => plan.name === planName);
+      
+      if (!selectedPlan) {
+        Alert.alert('Ошибка', `План ${planName} не найден`);
+        return;
+      }
+
       // Выполняем покупку подписки через контекст
       const result = await purchaseSubscription(
-        pendingSubscription.type,
+        selectedPlan.id,
         pendingSubscription.period,
         pendingSubscription.people
       );
@@ -483,12 +805,22 @@ export default function SubscriptionScreen() {
       setShowAddFamilyModal(false);
       setPendingSubscription(null);
 
-      // Показываем сообщение об успехе
-      Alert.alert(
-        'Успешно!', 
-        `Подписка ${result.plan.name} активирована до ${new Date(result.endDate).toLocaleDateString('ru-RU')}`,
-        [{ text: 'OK' }]
-      );
+      // Если подписка на несколько человек, показываем сообщение о возможности приглашения
+      if (pendingSubscription.people > 1) {
+        Alert.alert(
+          'Подписка оформлена!', 
+          `Теперь вы можете пригласить ${pendingSubscription.people - 1} ${pendingSubscription.people === 2 ? 'человека' : 'человек'} в семейную подписку.`,
+          [
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Успешно!', 
+          `Подписка ${result.plan.name} активирована до ${new Date(result.endDate).toLocaleDateString('ru-RU')}`,
+          [{ text: 'OK' }]
+        );
+      }
 
     } catch (error) {
       console.error('Ошибка при покупке подписки:', error);
@@ -502,7 +834,7 @@ export default function SubscriptionScreen() {
   };
 
   // Вспомогательные функции для активного абонемента
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string) => {
     switch (status) {
       case 'active': return SUCCESS;
       case 'frozen': return '#2196F3';
@@ -512,7 +844,9 @@ export default function SubscriptionScreen() {
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status?: string, isFrozen?: boolean, freezeStatus?: string) => {
+    if (isFrozen) return 'Заморожен';
+    if (freezeStatus === 'scheduled') return 'Заморозка запланирована';
     switch (status) {
       case 'active': return 'Активен';
       case 'frozen': return 'Заморожен';
@@ -541,7 +875,7 @@ export default function SubscriptionScreen() {
     return Math.min(100, Math.max(0, (elapsed / total) * 100));
   };
 
-  const selectedOption = subscriptionOptions.find(opt => opt.id === selectedType);
+  const selectedOption = subscriptionOptions?.find(opt => opt.id === selectedType);
 
   return (
     <View style={styles.container}>
@@ -564,55 +898,75 @@ export default function SubscriptionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Активный абонемент */}
-        {activeSubscription && (
-          <View style={styles.activeSubscriptionSection}>
-            <View style={styles.activeSubscriptionHeader}>
-              <ThemedText type="heading2" style={styles.activeSubscriptionTitle}>
+        {safeActiveSubscription && (
+          <View style={styles.safeActiveSubscriptionSection}>
+            <View style={styles.safeActiveSubscriptionHeader}>
+              <ThemedText type="heading2" style={styles.safeActiveSubscriptionTitle}>
                 Ваш активный абонемент
               </ThemedText>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activeSubscription.status) }]}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(safeActiveSubscription?.status) }]}>
                 <ThemedText style={styles.statusText}>
-                  {getStatusText(activeSubscription.status)}
+                  {getStatusText(safeActiveSubscription?.status, (safeActiveSubscription as any)?.isFrozen, (safeActiveSubscription as any)?.freezeInfo?.status)}
                 </ThemedText>
               </View>
             </View>
 
-            <View style={styles.activeSubscriptionCard}>
+            <View style={styles.safeActiveSubscriptionCard}>
               <View style={styles.subscriptionInfo}>
                 <View style={styles.planBadge}>
                   <MaterialIcons
-                    name={activeSubscription.plan.name === 'Gold' ? 'star' : 'star-outline'}
+                    name={safeActiveSubscription?.plan?.name?.includes('Gold') ? 'star' : 'star-outline'}
                     size={20}
-                    color={activeSubscription.plan.name === 'Gold' ? SECONDARY : PRIMARY}
+                    color={safeActiveSubscription?.plan?.name?.includes('Gold') ? SECONDARY : PRIMARY}
                   />
                   <ThemedText type="heading3" style={styles.planName}>
-                    {activeSubscription.plan.name} Pass
+                    {(() => {
+                      console.log('🔍 Plan data:', {
+                        plan: safeActiveSubscription?.plan,
+                        planName: safeActiveSubscription?.plan?.name,
+                        fullSubscription: safeActiveSubscription
+                      });
+                      return safeActiveSubscription?.plan?.name || 'План';
+                    })()}
                   </ThemedText>
                 </View>
 
                 <View style={styles.subscriptionDetails}>
                   <ThemedText style={styles.detailText}>
-                    {familyMembers.length + 1} {familyMembers.length + 1 === 1 ? 'человек' : 'человек'}
+                    {(safeFamilyMembers?.length || 0) + 1} {(safeFamilyMembers?.length || 0) + 1 === 1 ? 'человек' : 'человек'}
+                    {safeActiveSubscription?.plan?.name && (safeActiveSubscription.plan.name.includes('2') || safeActiveSubscription.plan.name.includes('3')) && 
+                      ` (максимум ${safeActiveSubscription.plan.name.includes('2') ? '2' : '3'})`
+                    }
                   </ThemedText>
                   <ThemedText style={styles.detailText}>
-                    {activeSubscription.period === 'monthly' ? 'Месячная' : 'Годовая'} оплата
+                    {safeActiveSubscription?.period === 'monthly' ? 'Месячная' : 'Годовая'} оплата
                   </ThemedText>
                   <ThemedText style={styles.detailText}>
-                    До {new Date(activeSubscription.endDate).toLocaleDateString('ru-RU')}
+                    До {safeActiveSubscription?.endDate ? new Date(safeActiveSubscription.endDate).toLocaleDateString('ru-RU') : 'Не указано'}
                   </ThemedText>
+                  {/* Показываем информацию о владельце для приглашенных пользователей */}
+                  {!safeActiveSubscription?.isOwner && safeActiveSubscription?.owner && (
+                    <ThemedText style={[styles.detailText, { color: TEXT_MUTED, fontStyle: 'italic' }]}>
+                      Владелец: {safeActiveSubscription.owner.name}
+                    </ThemedText>
+                  )}
                 </View>
               </View>
 
               <View style={styles.subscriptionActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => setShowFreezeModal(true)}
-                >
-                  <MaterialIcons name="fitness-center" size={20} color={PRIMARY} />
-                  <ThemedText style={styles.actionButtonText}>Заморозить</ThemedText>
-                </TouchableOpacity>
+                {/* Показываем кнопку "Заморозить" только владельцу подписки */}
+                {safeActiveSubscription?.isOwner && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => setShowFreezeModal(true)}
+                  >
+                    <MaterialIcons name="fitness-center" size={20} color={PRIMARY} />
+                    <ThemedText style={styles.actionButtonText}>Заморозить</ThemedText>
+                  </TouchableOpacity>
+                )}
 
-                {familyMembers.length > 0 && (
+                {/* Показываем кнопку "Семья" только владельцу подписки, если есть семейные члены или подписка на несколько человек */}
+                {safeActiveSubscription?.isOwner && ((safeFamilyMembers?.length || 0) > 0 || (safeActiveSubscription?.plan?.name && (safeActiveSubscription.plan.name.includes('2') || safeActiveSubscription.plan.name.includes('3')))) && (
                   <TouchableOpacity
                     style={styles.actionButton}
                     onPress={() => setShowFamilyModal(true)}
@@ -631,16 +985,18 @@ export default function SubscriptionScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Кнопка отмены подписки */}
-              <View style={styles.cancelSubscriptionSection}>
-                <TouchableOpacity
-                  style={styles.cancelSubscriptionButton}
-                  onPress={handleCancelSubscription}
-                >
-                  <MaterialIcons name="cancel" size={20} color={ERROR} />
-                  <ThemedText style={styles.cancelSubscriptionText}>Отменить подписку</ThemedText>
-                </TouchableOpacity>
-              </View>
+              {/* Кнопка отмены подписки - только для владельца */}
+              {safeActiveSubscription?.isOwner && (
+                <View style={styles.cancelSubscriptionSection}>
+                  <TouchableOpacity
+                    style={styles.cancelSubscriptionButton}
+                    onPress={handleCancelSubscription}
+                  >
+                    <MaterialIcons name="cancel" size={20} color={ERROR} />
+                    <ThemedText style={styles.cancelSubscriptionText}>Отменить подписку</ThemedText>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Прогресс бар для оставшихся дней */}
@@ -648,16 +1004,61 @@ export default function SubscriptionScreen() {
               <View style={styles.progressInfo}>
                 <ThemedText style={styles.progressLabel}>Осталось дней:</ThemedText>
                 <ThemedText type="heading3" style={styles.daysLeft}>
-                  {calculateDaysLeft(activeSubscription.endDate)}
+                  {safeActiveSubscription?.endDate ? calculateDaysLeft(safeActiveSubscription.endDate) : 'Не указано'}
                 </ThemedText>
               </View>
               <View style={styles.progressBar}>
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${calculateProgress(activeSubscription.startDate, activeSubscription.endDate)}%` }
+                    { width: `${safeActiveSubscription?.startDate && safeActiveSubscription?.endDate ? calculateProgress(safeActiveSubscription.startDate, safeActiveSubscription.endDate) : 0}%` }
                   ]}
                 />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Информация о заморозке */}
+        {((safeActiveSubscription as any)?.isFrozen || (safeActiveSubscription as any)?.freezeInfo?.status === 'scheduled') && (safeActiveSubscription as any)?.freezeInfo && (
+          <View style={styles.freezeInfoSection}>
+            <View style={styles.freezeInfoCard}>
+              <View style={styles.freezeInfoHeader}>
+                <MaterialIcons name="pause-circle-filled" size={24} color="#FF9800" />
+                <ThemedText type="heading3" style={styles.freezeInfoTitle}>
+                  {(safeActiveSubscription as any)?.freezeInfo?.status === 'scheduled' ? 'Заморозка запланирована' : 'Абонемент заморожен'}
+                </ThemedText>
+              </View>
+              <View style={styles.freezeInfoContent}>
+                <View style={styles.freezeInfoRow}>
+                  <ThemedText style={styles.freezeInfoLabel}>Период заморозки:</ThemedText>
+                  <ThemedText style={styles.freezeInfoValue}>
+                    {new Date((safeActiveSubscription as any).freezeInfo.startDate).toLocaleDateString('ru-RU')} - {new Date((safeActiveSubscription as any).freezeInfo.endDate).toLocaleDateString('ru-RU')}
+                  </ThemedText>
+                </View>
+                <View style={styles.freezeInfoRow}>
+                  <ThemedText style={styles.freezeInfoLabel}>Дней заморозки:</ThemedText>
+                  <ThemedText style={styles.freezeInfoValue}>
+                    {(safeActiveSubscription as any).freezeInfo.days} дней
+                  </ThemedText>
+                </View>
+                {(safeActiveSubscription as any).freezeInfo.reason && (
+                  <View style={styles.freezeInfoRow}>
+                    <ThemedText style={styles.freezeInfoLabel}>Причина:</ThemedText>
+                    <ThemedText style={styles.freezeInfoValue}>
+                      {(safeActiveSubscription as any).freezeInfo.reason}
+                    </ThemedText>
+                  </View>
+                )}
+                <View style={styles.freezeInfoNote}>
+                  <MaterialIcons name="info" size={16} color="#FF9800" />
+                  <ThemedText style={styles.freezeInfoNoteText}>
+                    {(safeActiveSubscription as any)?.freezeInfo?.status === 'scheduled' 
+                      ? 'Заморозка начнется в указанную дату. Во время заморозки вы не сможете посещать занятия, но дни абонемента не будут тратиться'
+                      : 'Во время заморозки вы не можете посещать занятия, но дни абонемента не тратятся'
+                    }
+                  </ThemedText>
+                </View>
               </View>
             </View>
           </View>
@@ -667,10 +1068,10 @@ export default function SubscriptionScreen() {
         <View style={styles.heroSection}>
           <View style={styles.heroContent}>
             <ThemedText type="heading1" style={styles.heroTitle}>
-              {activeSubscription ? 'Управление абонементом' : 'Выберите свой тариф'}
+              {safeActiveSubscription ? 'Управление абонементом' : 'Выберите свой тариф'}
             </ThemedText>
             <ThemedText style={styles.heroSubtitle}>
-              {activeSubscription
+              {safeActiveSubscription
                 ? 'Управляйте своим абонементом и семейными членами'
                 : 'Получите доступ ко всем залам сети и эксклюзивным тренировкам'
               }
@@ -678,23 +1079,9 @@ export default function SubscriptionScreen() {
           </View>
         </View>
 
-        {/* Статистика */}
-        <View style={styles.statsSection}>
-          <View style={styles.statsGrid}>
-            {subscriptionStats.map((stat, index) => (
-              <View key={index} style={styles.statCard}>
-                <MaterialIcons name={stat.icon as any} size={24} color={PRIMARY} />
-                <ThemedText type="heading3" style={styles.statValue}>
-                  {stat.value}
-                </ThemedText>
-                <ThemedText style={styles.statLabel}>{stat.label}</ThemedText>
-              </View>
-            ))}
-          </View>
-        </View>
 
         {/* Показываем выбор тарифов только если нет активной подписки */}
-        {!activeSubscription && (
+        {!safeActiveSubscription && (
           <>
             {/* Выбор количества людей */}
             <Animated.View
@@ -729,41 +1116,6 @@ export default function SubscriptionScreen() {
               </View>
             </Animated.View>
 
-            {/* Выбор периода оплаты */}
-            <View style={styles.periodSelectorSection}>
-              <ThemedText type="heading2" style={styles.sectionTitle}>
-                Период оплаты
-              </ThemedText>
-              <View style={styles.periodSelector}>
-                {[
-                  { key: 'monthly', label: 'Ежемесячно', discount: null },
-                  { key: 'yearly', label: 'Ежегодно', discount: 'Экономия до 30%' }
-                ].map((period) => (
-                  <TouchableOpacity
-                    key={period.key}
-                    style={[
-                      styles.periodOption,
-                      selectedPeriod === period.key && styles.periodOptionActive
-                    ]}
-                    onPress={() => setSelectedPeriod(period.key as PaymentPeriod)}
-                  >
-                    <View style={styles.periodOptionContent}>
-                      <ThemedText style={[
-                        styles.periodOptionText,
-                        selectedPeriod === period.key && styles.periodOptionTextActive
-                      ]}>
-                        {period.label}
-                      </ThemedText>
-                      {period.discount && (
-                        <View style={styles.savingsBadge}>
-                          <ThemedText style={styles.savingsText}>{period.discount}</ThemedText>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
 
             {/* Карточки тарифов */}
             <View style={styles.subscriptionsSection}>
@@ -772,13 +1124,13 @@ export default function SubscriptionScreen() {
               </ThemedText>
               
               <View style={styles.subscriptionCards}>
-            {subscriptionOptions.map((option) => (
+            {subscriptionOptions?.map((option) => (
               <Animated.View
-                key={option.id}
+                key={option?.id || 'unknown'}
                 style={[
                   styles.subscriptionCard,
-                  selectedType === option.id && styles.subscriptionCardActive,
-                  option.popular && styles.subscriptionCardPopular,
+                  selectedType === option?.id && styles.subscriptionCardActive,
+                  option?.popular && styles.subscriptionCardPopular,
                   {
                     opacity: fadeAnim,
                     transform: [{ scale: scaleAnim }],
@@ -787,57 +1139,55 @@ export default function SubscriptionScreen() {
               >
                 <TouchableOpacity
                   style={styles.subscriptionCardTouchable}
-                  onPress={() => animateCardSelection(option.id)}
+                  onPress={() => animateCardSelection(option?.id || 'yearly')}
                   activeOpacity={0.8}
                 >
-                {option.popular && (
+                {option?.popular && (
                   <View style={styles.popularBadge}>
                     <ThemedText style={styles.popularText}>Популярный</ThemedText>
                   </View>
                 )}
                 
                 <View style={styles.cardHeader}>
-                  <View style={[styles.planIcon, { backgroundColor: option.color + '20' }]}>
-                    <MaterialIcons name={option.icon as any} size={32} color={option.color} />
+                  <View style={[styles.planIcon, { backgroundColor: (option?.color || '#FF6246') + '20' }]}>
+                    <MaterialIcons name={(option?.icon || 'fitness-center') as any} size={32} color={option?.color || '#FF6246'} />
                   </View>
                   
                   <View style={styles.planInfo}>
                     <ThemedText type="heading3" style={styles.planTitle}>
-                      {option.title}
+                      {option?.title || 'План'}
                     </ThemedText>
                     <ThemedText style={styles.planSubtitle}>
-                      {option.subtitle}
+                      {option?.subtitle || 'Описание'}
                     </ThemedText>
                   </View>
                 </View>
 
                 <View style={styles.priceSection}>
                   <View style={styles.priceRow}>
-                    <ThemedText type="heading1" style={[styles.price, { color: option.color }]}>
+                    <ThemedText type="heading1" style={[styles.price, { color: option?.color || '#FF6246' }]}>
                       {formatPrice(getCurrentPrice(option))}
                     </ThemedText>
                     <ThemedText style={styles.period}>
-                      /{selectedPeriod === 'monthly' ? 'месяц' : 'год'}
+                      /год
                     </ThemedText>
                   </View>
                   <ThemedText style={styles.peopleCount}>
                     на {selectedPeople} {selectedPeople === 1 ? 'человека' : selectedPeople < 5 ? 'человек' : 'человек'}
                   </ThemedText>
-                  {selectedPeriod === 'yearly' && (
-                    <View style={styles.savingsBadge}>
-                      <ThemedText style={styles.savingsText}>
-                        Экономия {calculateSavings(option)}%
-                      </ThemedText>
-                    </View>
-                  )}
+                  <View style={styles.savingsBadge}>
+                    <ThemedText style={styles.savingsText}>
+                      Годовой абонемент
+                    </ThemedText>
+                  </View>
                 </View>
 
                 <ThemedText style={styles.planDescription}>
-                  {option.description}
+                  {option?.description || 'Описание плана'}
                 </ThemedText>
 
                 <View style={styles.featuresSection}>
-                  {option.features.slice(0, 4).map((feature, index) => (
+                  {(option?.features || []).slice(0, 4).map((feature, index) => (
                     <View key={index} style={styles.featureRow}>
                       <MaterialIcons
                         name={feature.included ? 'check-circle' : 'cancel'}
@@ -854,13 +1204,13 @@ export default function SubscriptionScreen() {
                     </View>
                   ))}
 
-                  {option.features.length > 4 && (
+                  {(option?.features?.length || 0) > 4 && (
                     <TouchableOpacity
                       style={styles.showMoreButton}
                       onPress={() => handleShowDetails(option)}
                     >
                       <ThemedText style={styles.showMoreText}>
-                        Показать все особенности ({option.features.length})
+                        Показать все особенности ({(option?.features?.length || 0)})
                       </ThemedText>
                       <MaterialIcons name="expand-more" size={16} color={PRIMARY} />
                     </TouchableOpacity>
@@ -908,22 +1258,15 @@ export default function SubscriptionScreen() {
         <View style={styles.actionsSection}>
           {selectedOption && (
             <Button
-              style={[styles.subscribeButton, { backgroundColor: selectedOption.color }]}
+              style={[styles.subscribeButton, { backgroundColor: selectedOption?.color || PRIMARY }]}
               onPress={() => handleSubscribe(selectedType)}
             >
               <ThemedText style={styles.subscribeButtonText}>
-                Подписаться на {selectedOption.title} • {formatPrice(getCurrentPrice(selectedOption))}
+                Оставить заявку на {selectedOption?.title || 'План'} • {formatPrice(getCurrentPrice(selectedOption))}
               </ThemedText>
             </Button>
           )}
 
-          {selectedPeriod === 'yearly' && selectedOption && (
-            <View style={styles.savingsInfo}>
-              <ThemedText style={styles.savingsInfoText}>
-                💰 Вы экономите {formatPrice((selectedOption.prices.monthly[selectedPeople] * 12) - getCurrentPrice(selectedOption))} при годовой оплате
-              </ThemedText>
-            </View>
-          )}
 
           <TouchableOpacity style={styles.compareButton}>
             <ThemedText style={styles.compareButtonText}>
@@ -942,26 +1285,47 @@ export default function SubscriptionScreen() {
           </ThemedText>
           
           <View style={styles.faqList}>
-            <TouchableOpacity style={styles.faqItem}>
-              <ThemedText style={styles.faqQuestion}>
-                Можно ли заморозить абонемент?
-              </ThemedText>
-              <Ionicons name="chevron-down" size={20} color={TEXT_MUTED} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.faqItem}>
-              <ThemedText style={styles.faqQuestion}>
-                Как добавить членов семьи?
-              </ThemedText>
-              <Ionicons name="chevron-down" size={20} color={TEXT_MUTED} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.faqItem}>
-              <ThemedText style={styles.faqQuestion}>
-                Можно ли отменить подписку?
-              </ThemedText>
-              <Ionicons name="chevron-down" size={20} color={TEXT_MUTED} />
-            </TouchableOpacity>
+            {faqData.map((faq, index) => (
+              <View key={index} style={styles.faqItemContainer}>
+                <TouchableOpacity 
+                  style={styles.faqItem}
+                  onPress={() => toggleFaqItem(index)}
+                >
+                  <ThemedText style={styles.faqQuestion}>
+                    {faq.question}
+                  </ThemedText>
+                  <Ionicons 
+                    name={openFaqItems.has(index) ? "chevron-up" : "chevron-down"} 
+                    size={20} 
+                    color={TEXT_MUTED} 
+                  />
+                </TouchableOpacity>
+                
+                {openFaqItems.has(index) && (
+                  <Animated.View 
+                    style={[
+                      styles.faqAnswer,
+                      {
+                        opacity: faqAnimations.get(index)?.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 1],
+                        }) || 0,
+                        transform: [{
+                          translateY: faqAnimations.get(index)?.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-10, 0],
+                          }) || -10,
+                        }],
+                      }
+                    ]}
+                  >
+                    <ThemedText style={styles.faqAnswerText}>
+                      {faq.answer}
+                    </ThemedText>
+                  </Animated.View>
+                )}
+              </View>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -1004,7 +1368,7 @@ export default function SubscriptionScreen() {
                   {selectedPlanForDetails ? formatPrice(getCurrentPrice(selectedPlanForDetails)) : ''}
                 </ThemedText>
                 <ThemedText style={styles.modalPeriod}>
-                  /{selectedPeriod === 'monthly' ? 'месяц' : 'год'}
+                  /год
                 </ThemedText>
               </View>
               <ThemedText style={styles.modalPeopleCount}>
@@ -1059,7 +1423,7 @@ export default function SubscriptionScreen() {
                 }}
               >
                 <ThemedText style={styles.modalSubscribeButtonText}>
-                  Выбрать {selectedPlanForDetails?.title}
+                  Оставить заявку на {selectedPlanForDetails?.title}
                 </ThemedText>
               </Button>
 
@@ -1096,7 +1460,7 @@ export default function SubscriptionScreen() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.modalSection}>
               <ThemedText style={styles.modalDescription}>
-                {activeSubscription?.plan.name === 'Gold' 
+                {safeActiveSubscription?.plan?.name?.includes('Gold') 
                   ? 'Gold Pass: 2 бесплатные заморозки по 30 дней каждая в год. При заморозке срок действия автоматически продлевается.'
                   : 'Silver Pass: 1 бесплатная заморозка до 30 дней в год. Дополнительные дни за 5,000 ₸. Запрос подается минимум за 7 дней.'
                 }
@@ -1128,7 +1492,7 @@ export default function SubscriptionScreen() {
                       styles.freezeOptionPrice,
                       freezeDays === days && styles.freezeOptionPriceActive
                     ]}>
-                      {days > 30 && activeSubscription?.plan.name === 'Silver' ? '5,000 ₸' : 'Бесплатно'}
+                      {days > 30 && safeActiveSubscription?.plan?.name === 'Silver' ? '5,000 ₸' : 'Бесплатно'}
                     </ThemedText>
                   </TouchableOpacity>
                 ))}
@@ -1221,7 +1585,7 @@ export default function SubscriptionScreen() {
               </ThemedText>
             </View>
 
-            {familyMembers.map((member) => (
+            {safeFamilyMembers?.map((member) => (
               <View key={member.id} style={styles.familyMember}>
                 <View style={styles.familyMemberInfo}>
                   <ThemedText type="defaultSemiBold" style={styles.familyMemberName}>
@@ -1249,11 +1613,24 @@ export default function SubscriptionScreen() {
             >
               <MaterialIcons name="person-add" size={20} color={PRIMARY} />
                   <ThemedText style={styles.addMemberText}>
-                    Пригласить по email
+                    Пригласить пользователя
                   </ThemedText>
             </TouchableOpacity>
 
             <View style={styles.modalActions}>
+              {/* Показываем кнопку приглашения если подписка на несколько человек и есть свободные места */}
+              {safeActiveSubscription?.plan?.name && (safeActiveSubscription.plan.name.includes('2') || safeActiveSubscription.plan.name.includes('3')) && 
+               (safeFamilyMembers?.length || 0) < (safeActiveSubscription.plan.name.includes('2') ? 1 : 2) && (
+                <TouchableOpacity
+                  style={styles.modalPrimaryButton}
+                  onPress={handleAddFamilyMember}
+                >
+                  <ThemedText style={styles.modalPrimaryButtonText}>
+                    Пригласить пользователя
+                  </ThemedText>
+                </TouchableOpacity>
+              )}
+              
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setShowFamilyModal(false)}
@@ -1285,7 +1662,7 @@ export default function SubscriptionScreen() {
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {paymentHistory.map((payment) => (
+            {safePaymentHistory?.map((payment) => (
               <View key={payment.id} style={styles.paymentItem}>
                 <View style={styles.paymentInfo}>
                   <ThemedText type="defaultSemiBold" style={styles.paymentType}>
@@ -1364,10 +1741,10 @@ export default function SubscriptionScreen() {
 
             <View style={styles.modalSection}>
               <ThemedText type="heading3" style={styles.modalSectionTitle}>
-                Члены семьи ({familyMembers.length}/{pendingSubscription ? pendingSubscription.people - 1 : 0})
+                Члены семьи ({(safeFamilyMembers?.length || 0)}/{pendingSubscription ? pendingSubscription.people - 1 : 0})
               </ThemedText>
               
-              {familyMembers.map((member) => (
+              {safeFamilyMembers?.map((member) => (
                 <View key={member.id} style={styles.familyMember}>
                   <View style={styles.familyMemberInfo}>
                     <ThemedText type="defaultSemiBold" style={styles.familyMemberName}>
@@ -1386,7 +1763,7 @@ export default function SubscriptionScreen() {
                 </View>
               ))}
 
-              {familyMembers.length < (pendingSubscription ? pendingSubscription.people - 1 : 0) && (
+              {(safeFamilyMembers?.length || 0) < (pendingSubscription ? pendingSubscription.people - 1 : 0) && (
                 <TouchableOpacity 
                   style={styles.addMemberButton}
                   onPress={() => handleAddFamilyMember()}
@@ -1403,7 +1780,6 @@ export default function SubscriptionScreen() {
               <Button
                 style={[styles.modalSubscribeButton, { backgroundColor: PRIMARY }]}
                 onPress={handleCompleteSubscription}
-                disabled={familyMembers.length < (pendingSubscription ? pendingSubscription.people - 1 : 0)}
               >
                 <ThemedText style={styles.modalSubscribeButtonText}>
                   Оформить подписку
@@ -1425,6 +1801,117 @@ export default function SubscriptionScreen() {
           </ScrollView>
         </View>
         </Modal>
+
+      {/* Модальное окно для приглашения в семейную подписку */}
+      <Modal
+        visible={showInviteModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowInviteModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <ThemedText type="heading2" style={styles.modalTitle}>
+              Пригласить в семейную подписку
+            </ThemedText>
+            <TouchableOpacity onPress={() => setShowInviteModal(false)}>
+              <Ionicons name="close" size={24} color={TEXT_DARK} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.modalSection}>
+              <ThemedText style={styles.modalDescription}>
+                Выберите способ приглашения и введите контактные данные
+              </ThemedText>
+            </View>
+
+            <View style={styles.modalSection}>
+              <ThemedText type="heading3" style={styles.modalSectionTitle}>
+                Способ приглашения
+              </ThemedText>
+              
+              <View style={styles.inviteMethodSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.inviteMethodButton,
+                    inviteMethod === 'email' && styles.inviteMethodButtonActive
+                  ]}
+                  onPress={() => setInviteMethod('email')}
+                >
+                  <MaterialIcons 
+                    name="email" 
+                    size={20} 
+                    color={inviteMethod === 'email' ? CARD_BG : TEXT_MUTED} 
+                  />
+                  <ThemedText style={[
+                    styles.inviteMethodText,
+                    inviteMethod === 'email' && styles.inviteMethodTextActive
+                  ]}>
+                    Email
+                  </ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.inviteMethodButton,
+                    inviteMethod === 'phone' && styles.inviteMethodButtonActive
+                  ]}
+                  onPress={() => setInviteMethod('phone')}
+                >
+                  <MaterialIcons 
+                    name="phone" 
+                    size={20} 
+                    color={inviteMethod === 'phone' ? CARD_BG : TEXT_MUTED} 
+                  />
+                  <ThemedText style={[
+                    styles.inviteMethodText,
+                    inviteMethod === 'phone' && styles.inviteMethodTextActive
+                  ]}>
+                    Телефон
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <ThemedText type="heading3" style={styles.modalSectionTitle}>
+                {inviteMethod === 'email' ? 'Email адрес' : 'Номер телефона'}
+              </ThemedText>
+              
+              <TextInput
+                style={styles.inviteInput}
+                placeholder={inviteMethod === 'email' ? 'example@email.com' : '+7 (777) 123-45-67'}
+                value={inviteMethod === 'email' ? inviteEmail : invitePhone}
+                onChangeText={inviteMethod === 'email' ? setInviteEmail : setInvitePhone}
+                keyboardType={inviteMethod === 'email' ? 'email-address' : 'phone-pad'}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Button
+                style={[styles.modalSubscribeButton, { backgroundColor: PRIMARY }]}
+                onPress={handleInviteFromModal}
+              >
+                <ThemedText style={styles.modalSubscribeButtonText}>
+                  Отправить приглашение
+                </ThemedText>
+              </Button>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowInviteModal(false)}
+              >
+                <ThemedText style={styles.modalCloseButtonText}>
+                  Отмена
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
 
       </View>
     );
@@ -1765,8 +2252,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  faqItem: {
+  faqItemContainer: {
     backgroundColor: CARD_BG,
+    borderBottomWidth: 1,
+    borderBottomColor: BG,
+  },
+  faqItem: {
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1776,6 +2267,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: TEXT_DARK,
     fontWeight: '500',
+    flex: 1,
+    marginRight: 12,
+  },
+  faqAnswer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: SURFACE_LIGHT,
+    overflow: 'hidden',
+  },
+  faqAnswerText: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    lineHeight: 20,
     flex: 1,
     marginRight: 12,
   },
@@ -2018,19 +2522,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  modalPrimaryButton: {
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalPrimaryButtonText: {
+    color: CARD_BG,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 
   // Active Subscription Styles
-  activeSubscriptionSection: {
+  safeActiveSubscriptionSection: {
     marginHorizontal: 20,
     marginBottom: 24,
   },
-  activeSubscriptionHeader: {
+  safeActiveSubscriptionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  activeSubscriptionTitle: {
+  safeActiveSubscriptionTitle: {
     color: TEXT_DARK,
   },
   statusBadge: {
@@ -2043,7 +2559,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  activeSubscriptionCard: {
+  safeActiveSubscriptionCard: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
     padding: 20,
@@ -2294,5 +2810,104 @@ const styles = StyleSheet.create({
     color: ERROR,
     fontWeight: '600',
     marginLeft: 8,
+  },
+
+  // Freeze Info Styles
+  freezeInfoSection: {
+    marginBottom: 24,
+  },
+  freezeInfoCard: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  freezeInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  freezeInfoTitle: {
+    color: '#E65100',
+    marginLeft: 12,
+    fontWeight: '600',
+  },
+  freezeInfoContent: {
+    gap: 12,
+  },
+  freezeInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  freezeInfoLabel: {
+    color: '#BF360C',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  freezeInfoValue: {
+    color: '#D84315',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 12,
+  },
+  freezeInfoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFE0B2',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  freezeInfoNoteText: {
+    color: '#E65100',
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+
+  // Invite Modal Styles
+  inviteMethodSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  inviteMethodButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: SURFACE_LIGHT,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: BORDER_LIGHT,
+  },
+  inviteMethodButtonActive: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  inviteMethodText: {
+    color: TEXT_MUTED,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  inviteMethodTextActive: {
+    color: CARD_BG,
+  },
+  inviteInput: {
+    backgroundColor: SURFACE_LIGHT,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: TEXT_DARK,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    marginBottom: 20,
   },
 }); 

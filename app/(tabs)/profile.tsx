@@ -1,4 +1,3 @@
-import { Logo } from '@/components/Logo';
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
 import { AppHeader } from '@/components/AppHeader';
@@ -7,12 +6,11 @@ import { api } from '@/lib/api';
 import { notificationService } from '@/lib/notifications';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     Dimensions,
-    Modal,
     RefreshControl,
     ScrollView,
     StatusBar,
@@ -20,7 +18,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../_layout';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -65,11 +62,16 @@ const settingsOptions = [
 ];
 
 function ProfileScreenContent() {
-  const { user, signOut } = useUser();
+  const { user, signOut, signIn } = useUser();
   const { activeSubscription, loadSubscriptionData } = useSubscription();
+  
+  // Безопасные значения из контекста
+  const safeUser = user || null;
+  const safeActiveSubscription = activeSubscription || null;
+  
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const [userStats, setUserStats] = useState({
+  const [safeUserStats, setUserStats] = useState({
     totalWorkouts: 0,
     thisMonth: 0,
     totalHours: 0,
@@ -78,37 +80,71 @@ function ProfileScreenContent() {
     completedBookings: 0,
     cancelledBookings: 0,
   });
-  const insets = useSafeAreaInsets();
 
   const loadUserStats = useCallback(async () => {
-    if (!user) return;
+    if (!safeUser || !safeUser.id) return;
     
     try {
-      console.log('📊 Loading user stats...');
+      console.log('📊 Loading safeUser stats...');
       const stats = await api.getUserStats();
       console.log('📊 User stats loaded:', stats);
-      setUserStats(stats);
-    } catch (error) {
-      console.log('❌ Failed to load user stats:', error);
+      
+      // Преобразуем данные в правильный формат
+      const statsData = stats as any;
+      const formattedStats = {
+        totalWorkouts: statsData.totalWorkouts || 0,
+        thisMonth: statsData.thisMonth || 0,
+        totalHours: statsData.totalHours || 0,
+        weekStreak: statsData.weekStreak || 0,
+        favoriteWorkout: statsData.favoriteWorkout || '-',
+        completedBookings: statsData.completedBookings || 0,
+        cancelledBookings: statsData.cancelledBookings || 0,
+      };
+      
+      setUserStats(formattedStats);
+    } catch (error: any) {
+      console.log('❌ Failed to load safeUser stats:', error);
+      // Если ошибка авторизации, не пытаемся снова
+      if (error.message && error.message.includes('Unauthorized')) {
+        console.log('🚫 Authorization failed, stopping stats loading');
+        return;
+      }
     }
-  }, [user]);
+  }, [safeUser]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      loadSubscriptionData(),
-      loadUserStats(),
-      new Promise(res => setTimeout(res, 1000))
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        loadSubscriptionData(),
+        loadUserStats(),
+        // Обновляем данные пользователя
+        (async () => {
+          try {
+            const userResponse = await api.getCurrentUser();
+            signIn(userResponse.user);
+          } catch (error) {
+            console.log('Failed to refresh user data:', error);
+          }
+        })(),
+        new Promise(res => setTimeout(res, 1000))
+      ]);
+    } catch (error) {
+      console.log('Failed to refresh profile data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  // Загружаем статистику при монтировании компонента
+  // Загружаем только статистику при монтировании компонента
   useEffect(() => {
-    if (user) {
+    if (safeUser && safeUser.id) {
       loadUserStats();
     }
-  }, [user, loadUserStats]);
+  }, [safeUser, loadUserStats]);
+
+  // Убираем автоматическое обновление при фокусе - оно не нужно
+  // useFocusEffect убран для предотвращения бесконечных запросов
 
   const handleSignOut = () => {
     Alert.alert(
@@ -388,7 +424,16 @@ function ProfileScreenContent() {
         router.push('/profile/change-password');
         break;
       case 'Семейная подписка':
-        router.push('/(tabs)/subscription' as any);
+        // Показываем семейную подписку только владельцу
+        if (currentUser.subscription.isOwner) {
+          router.push('/(tabs)/subscription' as any);
+        } else {
+          Alert.alert(
+            'Доступ ограничен',
+            'Управление семейной подпиской доступно только владельцу подписки.',
+            [{ text: 'Понятно' }]
+          );
+        }
         break;
       case 'Справка':
         handleHelpPress();
@@ -411,7 +456,7 @@ function ProfileScreenContent() {
   };
 
   // Если пользователь не авторизован
-  if (!user) {
+  if (!safeUser) {
     return (
       <View style={styles.container}>
         <StatusBar backgroundColor={HEADER_DARK} barStyle="light-content" translucent={false} />
@@ -468,33 +513,50 @@ function ProfileScreenContent() {
 
   // Используем реальные данные пользователя или моковые данные как fallback
   const currentUser = {
-    id: user?.id || 'guest',
-    name: user?.name || 'Гость',
-    email: user?.email || 'guest@example.com',
-    phone: user?.phone || '',
-    avatar: require('@/assets/images/placeholder_gym4.jpg'),
-    memberSince: '2024',
-    subscription: activeSubscription ? {
-      type: activeSubscription.planType === 'gold' ? 'Gold Pass' : 'Silver Pass',
-      status: activeSubscription.status === 'active' ? 'Активна' : 
-              activeSubscription.status === 'frozen' ? 'Заморожена' :
-              activeSubscription.status === 'cancelled' ? 'Отменена' : 'Неактивна',
-      expiresAt: new Date(activeSubscription.endDate).toLocaleDateString('ru-RU'),
-      membersCount: activeSubscription.peopleCount || 1,
-      maxMembers: activeSubscription.peopleCount || 1,
+    id: safeUser?.id || 'guest',
+    name: safeUser?.name || 'Гость',
+    email: safeUser?.email || 'guest@example.com',
+    phone: safeUser?.phone || '',
+    avatar: safeUser?.avatar && typeof safeUser.avatar === 'string' ? {
+      uri: safeUser.avatar.startsWith('http') 
+        ? safeUser.avatar 
+        : `${process.env.EXPO_PUBLIC_PARTNER_API_BASE || 'https://partner.xnova.kz'}${safeUser.avatar}`
+    } : null,
+    memberSince: safeUser?.createdAt ? new Date(safeUser.createdAt).getFullYear().toString() : new Date().getFullYear().toString(),
+    subscription: safeActiveSubscription ? {
+      type: (() => {
+        console.log('🔍 Profile plan data:', {
+          plan: safeActiveSubscription?.plan,
+          planName: safeActiveSubscription?.plan?.name,
+          fullSubscription: safeActiveSubscription
+        });
+        return safeActiveSubscription?.plan?.name || 'План';
+      })(),
+      status: (safeActiveSubscription as any)?.isFrozen ? 'Заморожена' :
+              (safeActiveSubscription as any)?.freezeInfo?.status === 'scheduled' ? 'Заморозка запланирована' :
+              safeActiveSubscription.status === 'active' ? 'Активна' : 
+              safeActiveSubscription.status === 'frozen' ? 'Заморожена' :
+              safeActiveSubscription.status === 'cancelled' ? 'Отменена' : 'Неактивна',
+      expiresAt: new Date(safeActiveSubscription.endDate).toLocaleDateString('ru-RU'),
+      membersCount: (safeActiveSubscription.familyMembers?.length || 0) + 1, // +1 для владельца
+      maxMembers: safeActiveSubscription.peopleCount || 1,
+      isOwner: safeActiveSubscription.isOwner || false,
+      owner: safeActiveSubscription.owner || null,
     } : {
       type: 'Без подписки',
       status: 'Неактивна',
       expiresAt: '-',
       membersCount: 0,
       maxMembers: 0,
+      isOwner: false,
+      owner: null,
     },
     stats: {
-      totalWorkouts: userStats.totalWorkouts,
-      thisMonth: userStats.thisMonth,
-      totalHours: userStats.totalHours,
-      streak: userStats.weekStreak,
-      favoriteWorkout: userStats.favoriteWorkout,
+      totalWorkouts: safeUserStats?.totalWorkouts || 0,
+      thisMonth: safeUserStats?.thisMonth || 0,
+      totalHours: safeUserStats?.totalHours || 0,
+      streak: safeUserStats?.weekStreak || 0,
+      favoriteWorkout: safeUserStats?.favoriteWorkout || 'Не указано',
     },
     achievements: [],
   };
@@ -523,12 +585,18 @@ function ProfileScreenContent() {
         <View style={styles.profileSection}>
           <View style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              <Image source={currentUser.avatar} style={styles.avatar} />
+              {currentUser.avatar ? (
+                <Image source={currentUser.avatar} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <MaterialIcons name="person" size={32} color={TEXT_MUTED} />
+                </View>
+              )}
               <View style={styles.profileInfo}>
-                <ThemedText type="heading2" style={styles.userName}>
+                <ThemedText type="heading2" style={styles.safeUserName}>
                   {currentUser.name}
                 </ThemedText>
-                <ThemedText style={styles.userEmail}>
+                <ThemedText style={styles.safeUserEmail}>
                   {currentUser.email}
                 </ThemedText>
                 <View style={styles.memberSince}>
@@ -563,12 +631,15 @@ function ProfileScreenContent() {
                   {currentUser.subscription.status} до {currentUser.subscription.expiresAt}
                 </ThemedText>
               </View>
-              <TouchableOpacity 
-                style={styles.manageButton}
-                onPress={() => router.push('/(tabs)/subscription' as any)}
-              >
-                <ThemedText style={styles.manageButtonText}>Управление</ThemedText>
-              </TouchableOpacity>
+              {/* Показываем кнопку "Управление" только владельцу подписки */}
+              {currentUser.subscription.isOwner && (
+                <TouchableOpacity 
+                  style={styles.manageButton}
+                  onPress={() => router.push('/(tabs)/subscription' as any)}
+                >
+                  <ThemedText style={styles.manageButtonText}>Управление</ThemedText>
+                </TouchableOpacity>
+              )}
             </View>
             
             <View style={styles.membersInfo}>
@@ -576,6 +647,12 @@ function ProfileScreenContent() {
                 <ThemedText style={styles.membersCountText}>
                   {currentUser.subscription.membersCount}/{currentUser.subscription.maxMembers} участников
                 </ThemedText>
+                {/* Показываем информацию о владельце для приглашенных пользователей */}
+                {!currentUser.subscription.isOwner && currentUser.subscription.owner && (
+                  <ThemedText style={[styles.membersCountText, { color: TEXT_MUTED, fontStyle: 'italic', fontSize: 12 }]}>
+                    Владелец: {currentUser.subscription.owner.name}
+                  </ThemedText>
+                )}
               </View>
               <View style={styles.membersBar}>
                 <View style={[
@@ -597,7 +674,7 @@ function ProfileScreenContent() {
             <View style={styles.statCard}>
               <MaterialIcons name="fitness-center" size={24} color={PRIMARY} />
               <ThemedText type="heading3" style={styles.statValue}>
-                {currentUser.stats.totalWorkouts}
+                {safeUserStats?.totalWorkouts || 0}
               </ThemedText>
               <ThemedText style={styles.statLabel}>Всего тренировок</ThemedText>
             </View>
@@ -605,7 +682,7 @@ function ProfileScreenContent() {
             <View style={styles.statCard}>
               <MaterialIcons name="calendar-month" size={24} color={SECONDARY} />
               <ThemedText type="heading3" style={styles.statValue}>
-                {currentUser.stats.thisMonth}
+                {safeUserStats?.thisMonth || 0}
               </ThemedText>
               <ThemedText style={styles.statLabel}>В этом месяце</ThemedText>
             </View>
@@ -613,7 +690,7 @@ function ProfileScreenContent() {
             <View style={styles.statCard}>
               <MaterialIcons name="schedule" size={24} color={SUCCESS} />
               <ThemedText type="heading3" style={styles.statValue}>
-                {currentUser.stats.totalHours}
+                {safeUserStats?.totalHours || 0}
               </ThemedText>
               <ThemedText style={styles.statLabel}>Часов тренировок</ThemedText>
             </View>
@@ -621,7 +698,7 @@ function ProfileScreenContent() {
             <View style={styles.statCard}>
               <MaterialIcons name="whatshot" size={24} color={WARNING} />
               <ThemedText type="heading3" style={styles.statValue}>
-                {currentUser.stats.streak}
+                {safeUserStats?.weekStreak || 0}
               </ThemedText>
               <ThemedText style={styles.statLabel}>Недель подряд</ThemedText>
             </View>
@@ -833,16 +910,24 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     marginRight: 16,
   },
+  avatarPlaceholder: {
+    backgroundColor: '#F8F9FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E9ECEF',
+    borderStyle: 'dashed',
+  },
   profileInfo: {
     flex: 1,
   },
-  userName: {
+  safeUserName: {
     fontSize: 20,
     fontWeight: 'bold',
     color: TEXT_DARK,
     marginBottom: 4,
   },
-  userEmail: {
+  safeUserEmail: {
     fontSize: 14,
     color: TEXT_MUTED,
     marginBottom: 8,

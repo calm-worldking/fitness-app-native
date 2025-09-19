@@ -21,21 +21,21 @@ export default function FamilyPage() {
       id: '1',
       name: 'Иван Иванов',
       email: 'ivan@example.com',
-      photo: require('../../assets/images/placeholder-user.jpg'),
+      photo: null,
       isActive: true
     },
     {
       id: '2',
       name: 'Мария Иванова',
       email: 'maria@example.com',
-      photo: require('../../assets/images/placeholder-user.jpg'),
+      photo: null,
       isActive: true
     },
     {
       id: '3',
       name: 'Алексей Иванов',
       email: 'alexey@example.com',
-      photo: require('../../assets/images/placeholder-user.jpg'),
+      photo: null,
       isActive: true
     }
   ]);

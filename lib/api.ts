@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store"
 
-const baseURL: string = process.env.EXPO_PUBLIC_PARTNER_API_BASE || "http://192.168.10.205:3001"
+const baseURL: string = process.env.EXPO_PUBLIC_PARTNER_API_BASE || "https://partner.xnova.kz"
 const TOKEN_KEY = "auth_token"
 
 export async function saveToken(token: string) {
@@ -41,10 +41,10 @@ export const api = {
     await saveToken(data.token)
     return data.user
   },
-  async register(name: string, email: string, password: string) {
+  async register(name: string, email: string, phone: string, password: string) {
     return request("/api/mobile/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, phone, password }),
     })
   },
   async getCurrentUser() {
@@ -75,8 +75,17 @@ export const api = {
   async createGym(input: { name: string; address?: string; description?: string; services?: string[] }) {
     return request(`/api/mobile/gyms`, { method: "POST", body: JSON.stringify(input) })
   },
-  async myBookings() {
-    return request<{ items: any[] }>(`/api/mobile/bookings`)
+  async myBookings(showPast = false) {
+    const params = showPast ? '?showPast=true' : ''
+    return request<{ items: any[] }>(`/api/mobile/bookings${params}`)
+  },
+  async confirmBooking(bookingId: string) {
+    return request(`/api/mobile/bookings/${bookingId}/confirm`, {
+      method: 'POST'
+    })
+  },
+  async getUserStats() {
+    return request(`/api/mobile/user/stats`)
   },
   async createBooking(classId: string) {
     return request(`/api/mobile/bookings`, { method: "POST", body: JSON.stringify({ classId }) })
@@ -139,7 +148,34 @@ export const api = {
 
   // API для работы с абонементами
   async getMySubscriptions() {
-    return request<{ subscriptions: any[]; activeSubscription: any; familyMembers: any[] }>('/api/mobile/subscriptions/me')
+    return request<{ data: { activeSubscription: any; allSubscriptions: any[]; subscriptionRequests: any[] } }>('/api/mobile/subscription')
+  },
+
+  async getUserProfile() {
+    return request<{ data: { id: string; name: string; email: string; phone?: string; avatar?: string; createdAt: string; userStats?: any; activeSubscription?: any } }>('/api/mobile/user')
+  },
+
+  async uploadAvatar(imageUri: string) {
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'avatar.jpg',
+    } as any);
+
+    return request<{ data: { avatarUrl: string; message: string } }>('/api/mobile/user/avatar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    });
+  },
+
+  async deleteAvatar() {
+    return request<{ data: { message: string } }>('/api/mobile/user/avatar', {
+      method: 'DELETE',
+    });
   },
 
   async getSubscriptionPlans() {
@@ -180,10 +216,15 @@ export const api = {
   },
 
   // API для приглашений
-  async sendInvitation(subscriptionId: string, invitationData: { email: string; message?: string }) {
-    return request(`/api/mobile/subscriptions/${subscriptionId}/invite`, {
+  async sendInvitation(subscriptionId: string, invitationData: { email?: string; phone?: string; message?: string }) {
+    return request(`/api/mobile/invitations/send`, {
       method: 'POST',
-      body: JSON.stringify(invitationData)
+      body: JSON.stringify({
+        subscriptionId,
+        inviteeEmail: invitationData.email,
+        inviteePhone: invitationData.phone,
+        message: invitationData.message
+      })
     })
   },
 
@@ -213,11 +254,27 @@ export const api = {
     })
   },
 
-  async removeFamilyMember(subscriptionId: string, memberId: string) {
-    return request(`/api/mobile/subscriptions/${subscriptionId}/remove-member`, {
-      method: 'DELETE',
-      body: JSON.stringify({ memberId })
+  async removeFamilyMember(memberId: string) {
+    return request(`/api/mobile/family-members/${memberId}`, {
+      method: 'DELETE'
     })
+  },
+
+  // Заявки на абонементы
+  async createSubscriptionRequest(requestData: { 
+    planId: string; 
+    period: 'monthly' | 'yearly'; 
+    peopleCount?: number; 
+    message?: string 
+  }) {
+    return request('/api/mobile/subscription-requests', {
+      method: 'POST',
+      body: JSON.stringify(requestData)
+    })
+  },
+
+  async getSubscriptionRequests() {
+    return request('/api/mobile/subscription-requests')
   },
 
   async cancelSubscription(subscriptionId: string) {
@@ -244,24 +301,6 @@ export const api = {
     }
   },
 
-  // API для получения статистики пользователя
-  async getUserStats() {
-    try {
-      return await request<{
-        totalWorkouts: number;
-        thisMonth: number;
-        totalHours: number;
-        weekStreak: number;
-        favoriteWorkout: string;
-        completedBookings: number;
-        cancelledBookings: number;
-      }>('/api/mobile/stats')
-    } catch {
-      console.log('Stats API not available, calculating from bookings...')
-      // Fallback: вычисляем статистику из данных о бронированиях
-      return this.calculateStatsFromBookings()
-    }
-  },
 
   // Вычисление статистики из данных о бронированиях
   async calculateStatsFromBookings() {
@@ -401,6 +440,8 @@ export type GymDto = {
   photos: string[]
   activityTags?: string[]
   instagram?: string | null
+  rating?: number
+  totalReviews?: number
   createdAt?: string
   latitude?: number | null
   longitude?: number | null
@@ -580,7 +621,28 @@ export async function cancelBooking(bookingId: string) {
   }
 }
 
+// API для отзывов
+export const reviewsApi = {
+  async createReview(bookingId: string, rating: number, comment?: string) {
+    const response = await request<any>('/api/mobile/reviews', {
+      method: 'POST',
+      body: JSON.stringify({
+        bookingId,
+        rating,
+        comment
+      })
+    })
+    return response
+  },
 
+  async getGymReviews(gymId: string, page = 1, limit = 10) {
+    const response = await request<any>(`/api/mobile/gyms/${gymId}/reviews?page=${page}&limit=${limit}`)
+    return response
+  },
 
-
+  async getReviewableBookings() {
+    const response = await request<any>('/api/mobile/user/reviewable-bookings')
+    return response
+  }
+}
 

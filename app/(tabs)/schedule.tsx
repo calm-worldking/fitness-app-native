@@ -1,12 +1,10 @@
 import { GymMap } from '@/components/GymMap';
-import { Logo } from '@/components/Logo';
 import { ThemedView } from '@/components/ThemedView';
 import { AppHeader } from '@/components/AppHeader';
 import { api } from '@/lib/api';
 import { shareInviteLink, copyInviteLink } from '@/lib/linking';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
@@ -17,11 +15,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Брендовые цвета BIRGE GO
 const PRIMARY = '#FF6246';
-const SECONDARY = '#FF8843';
 const BG = '#FFFFFF'; // Белый фон как на главной
 const CARD_BG = '#FFFFFF';
 const TEXT_DARK = '#000000';
@@ -29,7 +25,6 @@ const TEXT_MUTED = '#737373';
 const HEADER_DARK = '#0D1F2C';
 const SUCCESS = '#4CAF50';
 const INFO = '#2196F3';
-const WARNING = '#FF9800';
 const SURFACE_LIGHT = '#F8F9FA';
 const BORDER_LIGHT = '#E9ECEF';
 
@@ -42,16 +37,21 @@ interface BookedClass {
   gymName: string;
   gymAddress: string;
   gymRating: number;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  confirmedAt: string | null;
+  canConfirm: boolean;
   canConfirmIn: number; // минуты до возможности подтверждения
+  isPast: boolean;
+  isUpcoming: boolean;
+  isOngoing: boolean;
   location: {
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
   };
+  startsAt: string; // Исходная дата для сортировки
 }
 
 export default function ScheduleScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]);
   const [loading, setLoading] = useState(false);
   const [showGoogleCalendarBanner, setShowGoogleCalendarBanner] = useState(true);
@@ -69,14 +69,16 @@ export default function ScheduleScreen() {
         
         if (result.items && Array.isArray(result.items)) {
           const transformedBookings: BookedClass[] = result.items
-            .map((booking: any) => {
-              console.log('📡 Processing booking:', JSON.stringify(booking, null, 2));
-              
+            .filter((booking: any) => {
               // Проверяем структуру данных
               if (!booking.class || !booking.class.startsAt || !booking.class.endsAt) {
                 console.log('📡 Invalid booking structure:', booking);
-                return null;
+                return false;
               }
+              return true;
+            })
+            .map((booking: any) => {
+              console.log('📡 Processing booking:', JSON.stringify(booking, null, 2));
               
               const startDate = new Date(booking.class.startsAt);
               const endDate = new Date(booking.class.endsAt);
@@ -129,16 +131,29 @@ export default function ScheduleScreen() {
                 gymName: booking.class.gym.name,
                 gymAddress: booking.class.gym.address || '',
                 gymRating: booking.class.gym.rating || 0,
+                status: booking.status || 'pending',
+                confirmedAt: booking.confirmedAt,
+                canConfirm: booking.canConfirm || false,
                 canConfirmIn,
+                isPast: booking.isPast || false,
+                isUpcoming: booking.isUpcoming || false,
+                isOngoing: booking.isOngoing || false,
                 location: {
-                  lat: booking.class.gym.latitude || 43.238949,
-                  lng: booking.class.gym.longitude || 76.889709,
+                  lat: booking.class.gym.latitude || null,
+                  lng: booking.class.gym.longitude || null,
                 },
+                startsAt: booking.class.startsAt, // Сохраняем исходную дату для сортировки
           };
-        })
-        .filter((booking): booking is BookedClass => booking !== null);
+        });
       
-          setBookedClasses(transformedBookings);
+          // Сортируем занятия по времени начала (от ближайших к дальним)
+          const sortedBookings = transformedBookings.sort((a, b) => {
+            const dateA = new Date(a.startsAt);
+            const dateB = new Date(b.startsAt);
+            return dateA.getTime() - dateB.getTime();
+          });
+      
+          setBookedClasses(sortedBookings);
         } else {
           setBookedClasses([]);
         }
@@ -216,15 +231,29 @@ export default function ScheduleScreen() {
                 gymName: booking.class.gym.name,
                 gymAddress: booking.class.gym.address || '',
                 gymRating: booking.class.gym.rating || 0,
+                status: booking.status || 'pending',
+                confirmedAt: booking.confirmedAt,
+                canConfirm: booking.canConfirm || false,
                 canConfirmIn,
+                isPast: booking.isPast || false,
+                isUpcoming: booking.isUpcoming || false,
+                isOngoing: booking.isOngoing || false,
                 location: {
-                  lat: booking.class.gym.latitude || 43.238949,
-                  lng: booking.class.gym.longitude || 76.889709,
+                  lat: booking.class.gym.latitude || null,
+                  lng: booking.class.gym.longitude || null,
                 },
+                startsAt: booking.class.startsAt, // Сохраняем исходную дату для сортировки
               };
             });
             
-            setBookedClasses(transformedBookings);
+            // Сортируем занятия по времени начала (от ближайших к дальним)
+            const sortedBookings = transformedBookings.sort((a, b) => {
+              const dateA = new Date(a.startsAt);
+              const dateB = new Date(b.startsAt);
+              return dateA.getTime() - dateB.getTime();
+            });
+            
+            setBookedClasses(sortedBookings);
           } else {
             setBookedClasses([]);
           }
@@ -300,15 +329,29 @@ export default function ScheduleScreen() {
             gymName: booking.class.gym.name,
             gymAddress: booking.class.gym.address || '',
             gymRating: booking.class.gym.rating || 0,
+            status: booking.status || 'pending',
+            confirmedAt: booking.confirmedAt,
+            canConfirm: booking.canConfirm || false,
             canConfirmIn,
+            isPast: booking.isPast || false,
+            isUpcoming: booking.isUpcoming || false,
+            isOngoing: booking.isOngoing || false,
             location: {
               lat: booking.class.gym.latitude || 43.238949,
               lng: booking.class.gym.longitude || 76.889709,
             },
+            startsAt: booking.class.startsAt, // Сохраняем исходную дату для сортировки
           };
         });
         
-        setBookedClasses(transformedBookings);
+        // Сортируем занятия по времени начала (от ближайших к дальним)
+        const sortedBookings = transformedBookings.sort((a, b) => {
+          const dateA = new Date(a.startsAt);
+          const dateB = new Date(b.startsAt);
+          return dateA.getTime() - dateB.getTime();
+        });
+        
+        setBookedClasses(sortedBookings);
       } else {
         setBookedClasses([]);
       }
@@ -341,6 +384,34 @@ export default function ScheduleScreen() {
             } catch (error) {
               console.log('📱 Failed to cancel booking:', error);
               Alert.alert('Ошибка', 'Не удалось отменить занятие. Попробуйте еще раз.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirmClass = async (classId: string) => {
+    Alert.alert(
+      'Подтвердить занятие',
+      'Подтвердите, что вы присутствуете на занятии',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Подтвердить',
+          style: 'default', 
+          onPress: async () => {
+            try {
+              console.log('📡 Confirming booking:', classId);
+              await api.confirmBooking(classId);
+              
+              // Обновляем список бронирований
+              await refreshBookings();
+              
+              Alert.alert('Успешно', 'Занятие подтверждено! Ваш стрик обновлён.');
+            } catch (error) {
+              console.log('📱 Failed to confirm booking:', error);
+              Alert.alert('Ошибка', 'Не удалось подтвердить занятие. Попробуйте еще раз.');
             }
           },
         },
@@ -390,27 +461,8 @@ export default function ScheduleScreen() {
     );
   };
 
-  const handleRoute = (classId: string) => {
-    const classData = bookedClasses.find(cls => cls.id === classId);
-    if (classData) {
-      // Здесь будет интеграция с картами
-      Alert.alert('Маршрут', `Построение маршрута к ${classData.gymName}`);
-    }
-  };
 
-  const handleGoogleCalendar = () => {
-    Alert.alert('Google Calendar', 'Интеграция с Google Calendar будет доступна в следующем обновлении');
-  };
 
-  const formatTimeUntil = (minutes: number) => {
-    if (minutes <= 0) return 'Можно подтвердить';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours > 0) {
-      return `Подтвердить можно через ${hours}ч ${mins}мин`;
-    }
-    return `Подтвердить можно через ${mins} мин`;
-  };
 
 
 
@@ -446,7 +498,7 @@ export default function ScheduleScreen() {
                 </Text>
               </View>
               <Text style={styles.calendarBannerText}>
-                Добавьте занятия BIRGE GO в свой Google-календарь
+                Не забудьте добавить занятия в свой календарь
               </Text>
             </View>
             <TouchableOpacity 
@@ -536,18 +588,45 @@ export default function ScheduleScreen() {
 
               {/* Action Buttons */}
               <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={[
-                    styles.confirmButton,
-                    bookedClass.canConfirmIn > 0 && styles.confirmButtonDisabled
-                  ]}
-                  onPress={() => handleCancelClass(bookedClass.id)}
-                  disabled={bookedClass.canConfirmIn > 0}
-                >
-                  <Text style={styles.confirmButtonText}>
-                    Отменить занятие
-                  </Text>
-                </TouchableOpacity>
+                {/* Кнопка подтверждения - показываем только для pending занятий */}
+                {bookedClass.status === 'pending' && (
+                  <TouchableOpacity 
+                    style={[
+                      styles.confirmButton,
+                      !bookedClass.canConfirm && styles.confirmButtonDisabled
+                    ]}
+                    onPress={() => handleConfirmClass(bookedClass.id)}
+                    disabled={!bookedClass.canConfirm}
+                  >
+                    <Text style={styles.confirmButtonText}>
+                      {bookedClass.canConfirm ? 'Подтвердить занятие' : 
+                       bookedClass.canConfirmIn > 0 ? `Подтвердить через ${bookedClass.canConfirmIn} мин` :
+                       'Подтверждение недоступно'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Статус подтверждённого занятия */}
+                {bookedClass.status === 'confirmed' && (
+                  <View style={styles.confirmedStatus}>
+                    <MaterialIcons name="check-circle" size={20} color={SUCCESS} />
+                    <Text style={styles.confirmedText}>
+                      Занятие подтверждено
+                    </Text>
+                  </View>
+                )}
+
+                {/* Кнопка отмены - показываем для pending занятий, которые еще не начались */}
+                {bookedClass.status === 'pending' && !bookedClass.isPast && (
+                  <TouchableOpacity 
+                    style={styles.cancelButton}
+                    onPress={() => handleCancelClass(bookedClass.id)}
+                  >
+                    <Text style={styles.cancelButtonText}>
+                      Отменить занятие
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <View style={styles.secondaryActions}>
                   <TouchableOpacity
@@ -556,18 +635,8 @@ export default function ScheduleScreen() {
                   >
                     <MaterialIcons name="person-add" size={20} color={PRIMARY} />
                     <Text style={styles.secondaryButtonText}>Позвать</Text>
-            </TouchableOpacity>
-
-                  <View style={styles.buttonDivider} />
-
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() => handleRoute(bookedClass.id)}
-                  >
-                    <MaterialIcons name="directions" size={20} color={INFO} />
-                    <Text style={styles.secondaryButtonText}>Маршрут</Text>
-            </TouchableOpacity>
-          </View>
+                  </TouchableOpacity>
+                </View>
         </View>
             </View>
           ))
@@ -817,7 +886,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   confirmButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: SUCCESS,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -828,6 +897,33 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: CARD_BG,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: CARD_BG,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  confirmedStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#E8F5E8',
+    borderRadius: 12,
+    gap: 8,
+  },
+  confirmedText: {
+    color: SUCCESS,
     fontSize: 14,
     fontWeight: '600',
   },

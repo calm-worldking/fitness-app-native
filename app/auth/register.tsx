@@ -35,6 +35,7 @@ function RegisterScreenContent() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
   });
@@ -53,12 +54,45 @@ function RegisterScreenContent() {
       Alert.alert('Ошибка', 'Пожалуйста, введите email');
       return false;
     }
-    if (!formData.email.includes('@')) {
-      Alert.alert('Ошибка', 'Пожалуйста, введите корректный email');
+    // Улучшенная валидация email - более строгая
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert('Ошибка', 'Пожалуйста, введите корректный email адрес (например: user@example.com)');
       return false;
     }
-    if (formData.password.length < 6) {
-      Alert.alert('Ошибка', 'Пароль должен содержать минимум 6 символов');
+    // Дополнительная проверка на реалистичность
+    if (formData.email.length < 5 || formData.email.split('@')[0].length < 2) {
+      Alert.alert('Ошибка', 'Email адрес слишком короткий');
+      return false;
+    }
+    if (!formData.phone.trim()) {
+      Alert.alert('Ошибка', 'Пожалуйста, введите номер телефона');
+      return false;
+    }
+    // Валидация телефона (поддерживает различные форматы)
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,}$/;
+    if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+      Alert.alert('Ошибка', 'Пожалуйста, введите корректный номер телефона');
+      return false;
+    }
+    // Улучшенная валидация пароля
+    if (formData.password.length < 8) {
+      Alert.alert('Ошибка', 'Пароль должен содержать минимум 8 символов');
+      return false;
+    }
+    // Запрещаем пробелы в пароле
+    if (formData.password.includes(' ')) {
+      Alert.alert('Ошибка', 'Пароль не должен содержать пробелы');
+      return false;
+    }
+    // Проверяем сложность пароля
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+      Alert.alert('Ошибка', 'Пароль должен содержать заглавные и строчные буквы, а также цифры');
+      return false;
+    }
+    // Дополнительная проверка на специальные символы (рекомендуется)
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password)) {
+      Alert.alert('Ошибка', 'Пароль должен содержать хотя бы один специальный символ (!@#$%^&* и т.д.)');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -76,7 +110,7 @@ function RegisterScreenContent() {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      await api.register(formData.name, formData.email, formData.password);
+      await api.register(formData.name, formData.email, formData.phone, formData.password);
       // После успешной регистрации перенаправляем на страницу входа
       Alert.alert('Успех!', 'Регистрация прошла успешно! Теперь вы можете войти в систему.', [
         { text: 'ОК', onPress: () => router.replace('/auth/login') }
@@ -88,9 +122,6 @@ function RegisterScreenContent() {
     }
   };
 
-  const handleSocialRegister = (provider: string) => {
-    Alert.alert('Скоро', `Регистрация через ${provider} будет доступна в следующих версиях`);
-  };
 
   const updateFormData = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -163,13 +194,30 @@ function RegisterScreenContent() {
             </View>
           </View>
 
+          {/* Телефон */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Номер телефона</Text>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="phone" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
+              <TextInput
+                placeholder="+7 (999) 123-45-67"
+                placeholderTextColor={TEXT_MUTED}
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                value={formData.phone}
+                onChangeText={(value) => updateFormData('phone', value)}
+                style={styles.textInput}
+              />
+            </View>
+          </View>
+
           {/* Пароль */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Пароль</Text>
             <View style={styles.inputContainer}>
               <MaterialIcons name="lock" size={20} color={TEXT_MUTED} style={styles.inputIcon} />
               <TextInput
-                placeholder="Минимум 6 символов"
+                placeholder="8+ символов, буквы, цифры, спец. символы"
                 placeholderTextColor={TEXT_MUTED}
                 secureTextEntry={!showPassword}
                 autoComplete="password-new"
@@ -254,31 +302,6 @@ function RegisterScreenContent() {
           </Button>
         </View>
 
-        {/* Разделитель */}
-        <View style={styles.dividerSection}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>или</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Социальные кнопки */}
-        <View style={styles.socialSection}>
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={() => handleSocialRegister('Google')}
-          >
-            <MaterialIcons name="login" size={20} color={TEXT_DARK} />
-            <Text style={styles.socialButtonText}>Регистрация через Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={() => handleSocialRegister('Apple')}
-          >
-            <MaterialIcons name="smartphone" size={20} color={TEXT_DARK} />
-            <Text style={styles.socialButtonText}>Регистрация через Apple</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Вход */}
         <View style={styles.loginSection}>
@@ -292,40 +315,6 @@ function RegisterScreenContent() {
           </TouchableOpacity>
         </View>
 
-        {/* Преимущества */}
-        <View style={styles.benefitsSection}>
-          <ThemedText type="defaultSemiBold" style={styles.benefitsTitle}>
-            Что вас ждет:
-          </ThemedText>
-          
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="groups" size={20} color={PRIMARY} />
-            <Text style={styles.benefitText}>
-              Семейная подписка для всей семьи
-            </Text>
-          </View>
-          
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="fitness-center" size={20} color={SECONDARY} />
-            <Text style={styles.benefitText}>
-              Доступ к премиум залам по всему городу
-            </Text>
-          </View>
-          
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="analytics" size={20} color={SUCCESS} />
-            <Text style={styles.benefitText}>
-              Персональная статистика и достижения
-            </Text>
-          </View>
-
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="groups" size={20} color="#A259FF" />
-            <Text style={styles.benefitText}>
-              Групповые тренировки и мотивация
-            </Text>
-          </View>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -475,45 +464,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   
-  // Divider
-  dividerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: BG,
-  },
-  dividerText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    marginHorizontal: 16,
-  },
-  
-  // Social buttons
-  socialSection: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: BG,
-  },
-  socialButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: TEXT_DARK,
-    marginLeft: 12,
-  },
-  
   // Login section
   loginSection: {
     flexDirection: 'row',
@@ -529,30 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: PRIMARY,
     fontWeight: '600',
-  },
-  
-  // Benefits section
-  benefitsSection: {
-    backgroundColor: BG,
-    borderRadius: 16,
-    padding: 20,
-  },
-  benefitsTitle: {
-    fontSize: 16,
-    color: TEXT_DARK,
-    marginBottom: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  benefitText: {
-    fontSize: 14,
-    color: TEXT_DARK,
-    marginLeft: 12,
-    flex: 1,
-    fontWeight: '500',
   },
 }); 
 

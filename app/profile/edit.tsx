@@ -3,10 +3,10 @@ import { api } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,17 +20,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../_layout';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 // Брендовые цвета
 const PRIMARY = '#FF6246';
-const SECONDARY = '#FF8843';
 const BG = '#FFE7D8';
 const CARD_BG = '#FFFFFF';
 const TEXT_DARK = '#000000';
 const TEXT_MUTED = '#737373';
-const SUCCESS = '#4CAF50';
 const ERROR = '#FF3B30';
+const SURFACE_LIGHT = '#F8F9FA';
+const BORDER_LIGHT = '#E9ECEF';
 
 function EditProfileScreenContent() {
   const { user, signIn } = useUser();
@@ -43,7 +41,7 @@ function EditProfileScreenContent() {
     phone: user?.phone || '',
   });
   const [loading, setLoading] = useState(false);
-  const [avatar, setAvatar] = useState(require('@/assets/images/placeholder_gym4.jpg'));
+  const [avatar, setAvatar] = useState<{ uri: string } | null>(null);
 
   // Обновляем форму при изменении пользователя
   useEffect(() => {
@@ -53,6 +51,23 @@ function EditProfileScreenContent() {
         email: user.email || '',
         phone: user.phone || '',
       });
+      // Устанавливаем аватар из профиля пользователя
+      console.log('👤 Setting avatar from user profile:', {
+        userAvatar: user.avatar,
+        avatarType: typeof user.avatar,
+        hasAvatar: !!user.avatar
+      });
+      
+      if (user.avatar && typeof user.avatar === 'string') {
+        const fullAvatarUrl = user.avatar.startsWith('http') 
+          ? user.avatar 
+          : `${process.env.EXPO_PUBLIC_PARTNER_API_BASE || 'https://partner.xnova.kz'}${user.avatar}`;
+        console.log('📸 Setting avatar URL:', fullAvatarUrl);
+        setAvatar({ uri: fullAvatarUrl });
+      } else {
+        console.log('📸 No avatar, setting to null');
+        setAvatar(null);
+      }
     }
   }, [user]);
 
@@ -98,8 +113,14 @@ function EditProfileScreenContent() {
       // Обновляем пользователя в контексте
       const updatedUser = {
         ...response.user,
-        avatar
+        avatar: avatar ? avatar.uri : (response.user.avatar || user?.avatar)
       };
+      
+      console.log('👤 Updating user context:', {
+        responseUser: response.user,
+        localAvatar: avatar,
+        finalAvatar: updatedUser.avatar
+      });
       
       signIn(updatedUser);
       
@@ -119,10 +140,133 @@ function EditProfileScreenContent() {
       'Выберите способ',
       [
         { text: 'Отмена', style: 'cancel' },
-        { text: 'Сделать фото', onPress: () => Alert.alert('Скоро', 'Функция будет доступна в следующих версиях') },
-        { text: 'Выбрать из галереи', onPress: () => Alert.alert('Скоро', 'Функция будет доступна в следующих версиях') }
+        { text: 'Сделать фото', onPress: () => takePhoto() },
+        { text: 'Выбрать из галереи', onPress: () => pickImage() },
+        ...(avatar ? [{ text: 'Удалить фото', onPress: () => deleteAvatar(), style: 'destructive' as const }] : [])
       ]
     );
+  };
+
+  const takePhoto = async () => {
+    try {
+      // Запрашиваем разрешение на камеру
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Ошибка', 'Необходимо разрешение на использование камеры');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatar(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Ошибка', 'Не удалось сделать фото');
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      // Запрашиваем разрешение на галерею
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Ошибка', 'Необходимо разрешение на доступ к галерее');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatar(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Ошибка', 'Не удалось выбрать изображение');
+    }
+  };
+
+  const uploadAvatar = async (imageUri: string) => {
+    try {
+      setLoading(true);
+      console.log('📸 Uploading avatar:', imageUri);
+      
+      const response = await api.uploadAvatar(imageUri);
+      
+      if (response.data?.avatarUrl && typeof response.data.avatarUrl === 'string') {
+        const fullAvatarUrl = response.data.avatarUrl.startsWith('http') 
+          ? response.data.avatarUrl 
+          : `${process.env.EXPO_PUBLIC_PARTNER_API_BASE || 'https://partner.xnova.kz'}${response.data.avatarUrl}`;
+        
+        setAvatar({ uri: fullAvatarUrl });
+        
+        // Обновляем пользователя в контексте
+        const updatedUser = {
+          ...user,
+          avatar: response.data.avatarUrl // Сохраняем относительный путь
+        };
+        signIn(updatedUser);
+        
+        // Также обновляем локальное состояние аватара
+        setAvatar({ uri: fullAvatarUrl });
+        
+        // Перезагружаем данные пользователя из API для синхронизации
+        try {
+          const userProfile = await api.getUserProfile();
+          if (userProfile.data) {
+            signIn(userProfile.data);
+            console.log('✅ User profile updated after avatar upload');
+          }
+        } catch (error) {
+          console.log('⚠️ Failed to refresh user profile:', error);
+        }
+        
+        Alert.alert('Успех!', 'Аватар успешно загружен');
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить аватар');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteAvatar = async () => {
+    try {
+      setLoading(true);
+      console.log('🗑️ Deleting avatar');
+      
+      await api.deleteAvatar();
+      
+      setAvatar(null);
+      
+      // Обновляем пользователя в контексте
+      const updatedUser = {
+        ...user,
+        avatar: null
+      };
+      signIn(updatedUser);
+      
+      Alert.alert('Успех!', 'Аватар удален');
+    } catch (error) {
+      console.error('Error deleting avatar:', error);
+      Alert.alert('Ошибка', 'Не удалось удалить аватар');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -160,13 +304,21 @@ function EditProfileScreenContent() {
         {/* Аватар */}
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={handleChangeAvatar} style={styles.avatarContainer}>
-            <Image source={avatar} style={styles.avatar} />
+            {avatar ? (
+              <Image source={avatar} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <MaterialIcons name="person" size={48} color={TEXT_MUTED} />
+              </View>
+            )}
             <View style={styles.avatarOverlay}>
               <MaterialIcons name="camera-alt" size={24} color={CARD_BG} />
             </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleChangeAvatar} style={styles.changeAvatarButton}>
-            <Text style={styles.changeAvatarText}>Изменить фото</Text>
+            <Text style={styles.changeAvatarText}>
+              {avatar ? 'Изменить фото' : 'Добавить фото'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -349,6 +501,14 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
+  },
+  avatarPlaceholder: {
+    backgroundColor: SURFACE_LIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: BORDER_LIGHT,
+    borderStyle: 'dashed',
   },
   avatarOverlay: {
     position: 'absolute',

@@ -3,10 +3,11 @@ import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import { notificationService } from '@/lib/notifications';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     ScrollView,
@@ -44,7 +45,7 @@ interface ClassDetails {
     id: string;
     name: string;
     address?: string;
-    photos: string[];
+    photos?: string[];
   };
   category: string;
   rating?: number;
@@ -55,19 +56,14 @@ export default function ClassDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { activeSubscription } = useSubscription();
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   console.log('🎯 ClassDetailScreen rendered with ID:', id);
   console.log('🎯 useLocalSearchParams result:', useLocalSearchParams());
 
-  useEffect(() => {
-    if (id) {
-      loadClassDetails();
-    }
-  }, [id]);
-
-  const loadClassDetails = async () => {
+  const loadClassDetails = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -97,11 +93,11 @@ export default function ClassDetailScreen() {
             id: classData.gym?.id || classData.gymId,
             name: classData.gym?.name || 'Спортзал',
             address: classData.gym?.address || 'Адрес зала',
-            photos: ['https://via.placeholder.com/400x300/FF6246/FFFFFF?text=Gym+Photo'],
+            photos: (classData.gym as any)?.photos || [],
           },
           category: classData.title,
-          rating: 9.8, // В реальном API это поле должно приходить
-          totalRatings: 21532, // В реальном API это поле должно приходить
+          rating: (classData as any).rating || 0,
+          totalRatings: (classData as any).totalRatings || 0,
         };
         
         setClassDetails(classDetailsData);
@@ -116,9 +112,35 @@ export default function ClassDetailScreen() {
       console.log('🏁 Loading finished');
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      loadClassDetails();
+    }
+  }, [id, loadClassDetails]);
 
   const handleBookClass = () => {
+    // Проверяем, заморожена ли подписка
+    if ((activeSubscription as any)?.isFrozen) {
+      Alert.alert(
+        'Абонемент заморожен',
+        'Во время заморозки вы не можете записываться на занятия. Дождитесь окончания заморозки или обратитесь в поддержку.',
+        [{ text: 'Понятно', style: 'default' }]
+      );
+      return;
+    }
+
+    // Проверяем, есть ли активная подписка
+    if (!activeSubscription) {
+      Alert.alert(
+        'Нет активной подписки',
+        'Для записи на занятия необходима активная подписка. Оформите абонемент во вкладке "Абонемент".',
+        [{ text: 'Понятно', style: 'default' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Записаться на занятие',
       `Вы уверены, что хотите записаться на "${classDetails?.title}"?`,
@@ -272,12 +294,17 @@ export default function ClassDetailScreen() {
       >
         {/* Фото зала */}
         <View style={styles.imageContainer}>
-          <ExpoImage
-            source={{ uri: classDetails.gym.photos[0] || 'https://via.placeholder.com/400x300/FF6246/FFFFFF?text=Gym+Photo' }}
-            style={styles.gymImage}
-            contentFit="cover"
-            placeholder={require('@/assets/images/placeholder.jpg')}
-          />
+          {classDetails.gym.photos && classDetails.gym.photos.length > 0 ? (
+            <ExpoImage
+              source={{ uri: classDetails.gym.photos[0] }}
+              style={styles.gymImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.gymImage, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]}>
+              <Ionicons name="image-outline" size={40} color="#ccc" />
+            </View>
+          )}
           <View style={styles.imageOverlay}>
             <View style={styles.recommendationBadge}>
               <MaterialIcons name="thumb-up" size={16} color={PRIMARY} />
@@ -343,11 +370,17 @@ export default function ClassDetailScreen() {
 
           {/* Карточка зала */}
           <TouchableOpacity style={styles.gymCard} onPress={handleGymPress}>
-            <ExpoImage
-              source={{ uri: classDetails.gym.photos[0] || 'https://via.placeholder.com/60x60/FF6246/FFFFFF?text=Gym' }}
-              style={styles.gymThumbnail}
-              contentFit="cover"
-            />
+            {classDetails.gym.photos && classDetails.gym.photos.length > 0 ? (
+              <ExpoImage
+                source={{ uri: classDetails.gym.photos[0] }}
+                style={styles.gymThumbnail}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.gymThumbnail, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="image-outline" size={20} color="#ccc" />
+              </View>
+            )}
             <View style={styles.gymInfo}>
               <ThemedText type="defaultSemiBold" style={styles.gymName}>
                 {classDetails.gym.name}

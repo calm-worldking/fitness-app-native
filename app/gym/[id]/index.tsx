@@ -6,7 +6,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { fetchGym } from '@/lib/api';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     Dimensions,
@@ -78,7 +78,7 @@ export default function GymPage() {
     }
   };
 
-    const loadGym = async () => {
+    const loadGym = useCallback(async () => {
       try {
         setLoading(true);
         
@@ -108,24 +108,8 @@ export default function GymPage() {
             });
           }
           
-          // Если нет фотографий или их мало, добавляем placeholder изображения
-          if (images.length === 0) {
-            console.log('📸 No photos found, using placeholders');
-            images = [
-              require('@/assets/images/placeholder_gym1.jpg'),
-              require('@/assets/images/placeholder_gym2.jpg'),
-              require('@/assets/images/placeholder_gym3.jpg'),
-            ];
-          } else if (images.length < 3) {
-            // Добавляем placeholder изображения, если фотографий меньше 3
-            console.log('📸 Adding placeholders to reach 3 images');
-            const placeholders = [
-              require('@/assets/images/placeholder_gym1.jpg'),
-              require('@/assets/images/placeholder_gym2.jpg'),
-              require('@/assets/images/placeholder_gym3.jpg'),
-            ];
-            images = [...images, ...placeholders.slice(0, 3 - images.length)];
-          }
+          // Показываем только реальные фотографии зала
+          console.log('📸 Using only real photos:', images.length);
 
           console.log('📸 Final images array:', images);
 
@@ -138,15 +122,17 @@ export default function GymPage() {
 
           console.log('📊 Gym services:', foundGym.services);
           console.log('📊 Gym classes count:', foundGym._count?.classes);
+          console.log('📊 Gym instagram:', foundGym.instagram);
 
           const gymData = {
             id: foundGym.id,
             name: foundGym.name,
             address: foundGym.address || 'Адрес не указан',
             description: foundGym.description || 'Описание отсутствует',
+            instagram: foundGym.instagram,
             images: images,
-            rating: foundGym.rating || 9.8,
-            totalReviews: foundGym.totalReviews || 27721,
+            rating: foundGym.rating || 0,
+            totalReviews: foundGym.totalReviews || 0,
             visits: foundGym.visits || 12,
             maxVisits: foundGym.maxVisits || 12,
             // GIS данные
@@ -156,9 +142,13 @@ export default function GymPage() {
             // Услуги из API
             features: foundGym.services?.map((service: string) => ({
               name: service,
-              icon: 'fitness-center' as any
+              icon: 'circle' as any
             })) || [],
-            // Количество занятий
+            // Статистика зала из API
+            todayClasses: foundGym.todayClasses || 0,
+            todayClassTypes: foundGym.todayClassTypes || 0,
+            workingHours: foundGym.workingHours || { open: "06:00", close: "23:00" },
+            // Количество занятий (общее)
             classesCount: foundGym._count?.classes || 0,
             classTypesCount: foundGym._count?.classTypes || 0,
             amenities: foundGym.amenities || [
@@ -183,13 +173,13 @@ export default function GymPage() {
       } finally {
         setLoading(false);
       }
-    };
+    }, [id]);
 
   useEffect(() => {
     if (id) {
       loadGym();
     }
-  }, [id]);
+  }, [id, loadGym]);
 
 
 
@@ -199,7 +189,6 @@ export default function GymPage() {
         <OptimizedImage
           source={item}
           style={styles.carouselImage}
-          placeholder={require('@/assets/images/placeholder_gym1.jpg')}
           onLoad={() => console.log('✅ Image loaded successfully:', item)}
           onError={(error) => console.log('❌ Failed to load image:', item, error)}
         />
@@ -309,13 +298,22 @@ export default function GymPage() {
               <ThemedText type="heading1" style={styles.gymName}>
                 {gym.name}
               </ThemedText>
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={16} color={PRIMARY} />
-                <ThemedText style={styles.rating}>{gym.rating}</ThemedText>
-                <ThemedText style={styles.reviewCount}>
-                  ({gym.totalReviews.toLocaleString()})
-                </ThemedText>
-              </View>
+              {gym.rating && gym.rating > 0 ? (
+                <View style={styles.ratingContainer}>
+                  <Ionicons name="star" size={16} color={PRIMARY} />
+                  <ThemedText style={styles.rating}>{gym.rating}</ThemedText>
+                  <ThemedText style={styles.reviewCount}>
+                    ({gym.totalReviews?.toLocaleString() || 0})
+                  </ThemedText>
+                </View>
+              ) : (
+                <View style={styles.ratingContainer}>
+                  <Ionicons name="star-outline" size={16} color={TEXT_MUTED} />
+                  <ThemedText style={[styles.rating, { color: TEXT_MUTED }]}>
+                    Нет рейтинга
+                  </ThemedText>
+                </View>
+              )}
             </View>
             
             <TouchableOpacity
@@ -324,23 +322,26 @@ export default function GymPage() {
             >
               <Ionicons name="location-outline" size={16} color={PRIMARY} />
               <ThemedText style={styles.address}>{gym.address}</ThemedText>
-              {(gym.latitude && gym.longitude) && (
-                <View style={styles.gisInfo}>
-                  <Ionicons name="navigate" size={14} color={SECONDARY} />
-                  <ThemedText style={styles.gisText}>
-                    📍 {gym.latitude.toFixed(6)}, {gym.longitude.toFixed(6)}
-                  </ThemedText>
-                </View>
-              )}
-              {(!gym.latitude || !gym.longitude) && (
-                <View style={styles.gisInfo}>
-                  <Ionicons name="location" size={14} color={TEXT_MUTED} />
-                  <ThemedText style={[styles.gisText, { color: TEXT_MUTED }]}>
-                    Координаты недоступны
-                  </ThemedText>
-                </View>
-              )}
             </TouchableOpacity>
+            
+            {/* Instagram профиль */}
+            {console.log('🔍 Instagram check:', { instagram: gym.instagram, exists: !!gym.instagram })}
+            {gym.instagram && (
+              <TouchableOpacity
+                style={styles.instagramContainer}
+                onPress={() => {
+                  const instagramUrl = gym.instagram.startsWith('@') 
+                    ? `https://instagram.com/${gym.instagram.substring(1)}`
+                    : gym.instagram.startsWith('http')
+                    ? gym.instagram
+                    : `https://instagram.com/${gym.instagram}`;
+                  Linking.openURL(instagramUrl);
+                }}
+              >
+                <Ionicons name="logo-instagram" size={16} color={PRIMARY} />
+                <ThemedText style={styles.instagramText}>{gym.instagram}</ThemedText>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Статистика зала */}
@@ -352,7 +353,7 @@ export default function GymPage() {
               <View style={styles.statCard}>
                 <MaterialIcons name="fitness-center" size={24} color={PRIMARY} />
                 <ThemedText type="heading3" style={styles.statValue}>
-                  {gym._count?.classes || 0}
+                  {gym.todayClasses || 0}
                 </ThemedText>
                 <ThemedText style={styles.statLabel}>Занятий сегодня</ThemedText>
               </View>
@@ -360,7 +361,7 @@ export default function GymPage() {
               <View style={styles.statCard}>
                 <MaterialIcons name="people" size={24} color={SECONDARY} />
                 <ThemedText type="heading3" style={styles.statValue}>
-                  {gym._count?.classTypes || 0}
+                  {gym.todayClassTypes || 0}
                 </ThemedText>
                 <ThemedText style={styles.statLabel}>Типов занятий</ThemedText>
               </View>
@@ -368,8 +369,8 @@ export default function GymPage() {
               <View style={styles.statCard}>
                 <MaterialIcons name="schedule" size={24} color={SUCCESS} />
                 <ThemedText type="heading3" style={styles.statValue}>
-                  23:00
-              </ThemedText>
+                  {gym.workingHours?.close || "23:00"}
+                </ThemedText>
                 <ThemedText style={styles.statLabel}>Работает до</ThemedText>
               </View>
             </View>
@@ -387,7 +388,7 @@ export default function GymPage() {
                 gym.features.map((feature: any, index: number) => (
                 <View key={index} style={styles.amenityItem}>
                   <View style={styles.amenityIcon}>
-                    <MaterialIcons name={feature.icon} size={20} color={PRIMARY} />
+                    <MaterialIcons name={feature.icon} size={20} color={SUCCESS} />
                   </View>
                   <ThemedText style={styles.amenityText}>{feature.name}</ThemedText>
                 </View>
@@ -403,10 +404,6 @@ export default function GymPage() {
                 </View>
               )}
             </View>
-            <TouchableOpacity style={styles.showAllButton}>
-              <ThemedText style={styles.showAllText}>Показать все</ThemedText>
-              <Ionicons name="chevron-forward" size={16} color={PRIMARY} />
-            </TouchableOpacity>
           </View>
 
           {/* Описание */}
@@ -590,18 +587,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
-  gisInfo: {
+  instagramContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    marginLeft: 24,
+    backgroundColor: BG,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
   },
-  gisText: {
-    fontSize: 12,
-    color: SECONDARY,
-    marginLeft: 4,
-    fontFamily: 'SpaceMono-Regular',
-    fontWeight: '500',
+  instagramText: {
+    fontSize: 16,
+    color: PRIMARY,
+    marginLeft: 8,
+    flex: 1,
   },
   
   // Stats section
